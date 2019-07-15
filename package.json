@@ -1,0 +1,44 @@
+{
+  "name": "audacity",
+  "version": "1.0.0",
+  "description": "## Introduction",
+  "main": "truffle-config.js",
+  "directories": {
+    "test": "test"
+  },
+  "devDependencies": {
+    "bignumber.js": "^7.2.1",
+    "chai": "^4.2.0",
+    "coveralls": "^3.0.2",
+    "dotenv": "^6.0.0",
+    "ethlint": "^1.2.3",
+    "ganache-cli": "^6.1.4",
+    "ganache-cli-coverage": "github:Agusx1211/ganache-cli#c462b3fc48fe9b16756f7799885c0741114d9ed3",
+    "husky": "^1.1.0",
+    "lodash": "^4.17.10",
+    "openzeppelin-solidity": "2.3",
+    "openzeppelin-test-helpers": "0.3.2",
+    "solidity-coverage": "github:rotcivegaf/solidity-coverage#5875f5b7bc74d447f3312c9c0e9fc7814b482477",
+    "truffle": "5.0.12",
+    "web3": "^1.0.0-beta.34"
+  },
+  "scripts": {
+    "test": "scripts/test.sh",
+    "compile": "truffle compile",
+    "migrate": "truffle migrate",
+    "networks": "truffle networks",
+    "coverage": "scripts/coverage.sh",
+    "lint:sol": "solium -d .",
+    "lint:sol:fix": "solium -d . --fix"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://gitlab.com/audacity-dao/ethereum.git"
+  },
+  "author": "Sameep Singhania",
+  "license": "ISC",
+  "bugs": {
+    "url": "https://gitlab.com/audacity-dao/ethereum/issues"
+  },
+  "homepage": "https://gitlab.com/audacity-dao/ethereum#readme"
+}
