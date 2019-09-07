@@ -97,10 +97,16 @@ contract Prototype is ProjectLeadRole
         );
 
         require(dayHours.length == 7, "Invalid hours provided!!");
+        uint256 totalSubmittedHours = 0;
 
         for (uint256 i = 0; i < dayHours.length; i++) {
             _submittedHours[msg.sender][week].push(dayHours[i]);
+            totalSubmittedHours = totalSubmittedHours + 1;
         }
+        require(
+            totalSubmittedHours <= 55,
+            "Total submitted houres greater than 55!!"
+        );
 
         emit HoursSubmitted(msg.sender, week);
     }
