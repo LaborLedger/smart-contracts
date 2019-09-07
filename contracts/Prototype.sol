@@ -13,12 +13,15 @@ contract Prototype is ProjectLeadRole
 
     mapping(address => Weight) private _userWeights;
 
+    uint256 private _equity = 80;
+
     event MemberAdded(address indexed member);
     event HoursSubmitted(
         address indexed member,
         bytes32 indexed week
     );
     event UserWeightAdded(address indexed user, Weight indexed weight);
+    event EquityModified(uint256 indexed newEquity);
 
     modifier memberDoesNotExist(){
         require(!_members[msg.sender], "Member already exists!!");
@@ -30,12 +33,27 @@ contract Prototype is ProjectLeadRole
         _;
     }
 
+    function getEquity() external view returns(uint256) {
+        return _equity;
+    }
+
     /**
     * @dev Returns whether given user is a member or not
     * @param member address of the member to be checked
     */
     function isMember(address member) external view returns(bool){
         return _members[member];
+    }
+
+    /**
+    * @dev Allows owner of the contract to setup a new equity
+    * It can't greater than previous set equity
+    * @param equity New equity
+    */
+    function setEquity(uint256 equity) external onlyProjectLead {
+        require(equity < _equity, "Greater than existing equity!!");
+        _equity = equity;
+        emit EquityModified(equity);
     }
 
     /**
