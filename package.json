@@ -20,11 +20,13 @@
     "openzeppelin-test-helpers": "0.3.2",
     "solidity-coverage": "github:rotcivegaf/solidity-coverage#5875f5b7bc74d447f3312c9c0e9fc7814b482477",
     "truffle": "5.0.12",
+    "truffle-flattener": "^1.4.2",
     "web3": "^1.0.0-beta.34"
   },
   "scripts": {
     "test": "scripts/test.sh",
     "compile": "truffle compile",
+    "flatten": "sh -c '([ -d build/ ] || mkdir build) && truffle-flattener contracts/Prototype.sol > build/Prototype.flatten.sol'",
     "migrate": "truffle migrate",
     "networks": "truffle networks",
     "coverage": "scripts/coverage.sh",

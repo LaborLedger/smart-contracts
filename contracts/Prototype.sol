@@ -6,22 +6,34 @@ import "./ProjectLeadRole.sol";
 contract Prototype is ProjectLeadRole
 {
     enum Weight {_, STANDARD, SENIOR, ADVISOR}
-    //Mapping of whether member exists or not
-    mapping(address => bool) private _members;
+    enum Status { _, TRIAL, ACTIVE }
 
-    mapping(address => mapping(bytes32 => uint256[])) private _submittedHours;
+    struct Member {
+        Status status;
+        Weight weight;
+        // in 300 second units
+        uint32 submittedHours;
+    }
 
-    mapping(address => Weight) private _userWeights;
+    // terms of collaboration (keccak256-hash)
+    uint256 private _terms;
+    // weighted-hour-based equity pool, in basis points (0.01%)
+    uint16 private _equity = 8000;
+    // total submitted hours, in 300 second units
+    uint32 private _submittedHours;
+    // total weighted submitted hours, in 300 second units
+    uint32 private _submittedWeightedHours;
 
-    uint256 private _equity = 80;
+    mapping(address => Member) private _members;
 
-    event MemberAdded(address indexed member);
     event HoursSubmitted(
         address indexed member,
-        bytes32 indexed week
+        uint8 indexed week,
+        uint16[7] dailyHours
     );
     event UserWeightAdded(address indexed user, Weight indexed weight);
-    event EquityModified(uint256 indexed newEquity);
+    // in basis points (0.01%)
+    event EquityModified(uint16 indexed newEquity);
 
     modifier memberDoesNotExist(){
         require(!_members[msg.sender], "Member already exists!!");
@@ -33,8 +45,20 @@ contract Prototype is ProjectLeadRole
         _;
     }
 
-    function getEquity() external view returns(uint256) {
+    function getTerms() external view returns(uint256) {
+        return _terms;
+    }
+
+    function getEquity() external view returns(uint16) {
         return _equity;
+    }
+
+    function getSubmittedHours() external view returns(uint32) {
+        return _submittedHours;
+    }
+
+    function getSubmittedWeightedHours() external view returns(uint32) {
+        return _submittedWeightedHours;
     }
 
     /**
@@ -47,10 +71,10 @@ contract Prototype is ProjectLeadRole
 
     /**
     * @dev Allows owner of the contract to setup a new equity
-    * It can't greater than previous set equity
-    * @param equity New equity
+    * It may not be greater than previous set equity
+    * @param equity New equity in basis points (0.01%)
     */
-    function setEquity(uint256 equity) external onlyProjectLead {
+    function setEquity(uint16 equity) external onlyProjectLead {
         require(equity < _equity, "Greater than existing equity!!");
         _equity = equity;
         emit EquityModified(equity);
@@ -70,11 +94,11 @@ contract Prototype is ProjectLeadRole
         memberExist(user)
     {
         require(
-            _userWeights[user] == Weight._,
+            _members[user][weight] == Weight._,
             "Weight already set for the user!!"
         );
 
-        _userWeights[user] = weight;
+        _members[user][weight] = weight;
 
         emit UserWeightAdded(user, weight);
     }
@@ -83,27 +107,27 @@ contract Prototype is ProjectLeadRole
     * @dev Returns user weight
     * @param user User whose weight needs to be returned
     */
-    function getUserWeight(address user) external view returns(Weight) {
-        return _userWeights[user];
+    function getUserWeight(address user) external view memberExist(user) returns(Weight) {
+        return _members[user][weight];
     }
 
     /**
     * @dev Allows a new user to join
     */
-    function join() external memberDoesNotExist{
-        _members[msg.sender] = true;
-
+    function join(uint256 terms, Status status) external memberDoesNotExist{
+        require(_terms == terms, "Collaboration terms mismatch");
+        _members[msg.sender][status] = status;
         emit MemberAdded(msg.sender);
     }
 
     /**
     * @dev Allows existing members to submit hours
-    * @param week Week in bytes32 format
-    * @param dayHours Number of hours worked each day in a week
+    * @param week Week as uint8
+    * @param dayHours Time worked each day in a week, in 300 second units
     */
     function submitHours(
-        bytes32 week,
-        uint[7] calldata dayHours
+        uint8 week,
+        uint16[7] calldata dayHours
     )
         external
         memberExist(msg.sender)
@@ -175,3 +199,5 @@ contract Prototype is ProjectLeadRole
         return dayHours;
     }
 }
+
+// return block.timestamp >= _openingTime && block.timestamp <= _closingTime;
