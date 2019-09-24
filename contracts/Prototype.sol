@@ -5,51 +5,139 @@ import "./ProjectLeadRole.sol";
 
 contract Prototype is ProjectLeadRole
 {
-    enum Weight {_, STANDARD, SENIOR, ADVISOR}
-    enum Status { _, TRIAL, ACTIVE }
+    /***  Units and Week Indexes
+    *
+    * All submitted, stored and returned working hours are measured in Time Units
+    * 1 Time Unit = 300 seconds
+    * (N.B.: safeMath lib is not used as expected values are too small to cause overflows)
+    *
+    * Equity submitted, stored and returned in Share Units
+    * 100% = 1,000,000 Share Unit
+    *
+    * Weeks are submitted, stored and returned as Week Indexes
+    * Week Index - number of complete (Mon-Sun) ended weeks since epoch plus one
+    *   - the first complete week started at 00:00:00 UTC on Monday, 5 January 1970 (UNIX Time 345600),
+    *     it has WeekIndex 1
+    *   - the week that started at 00:00:00 UTC on Monday, 23 September 2019 has WeekIndex 2595
+    */
+
+    enum Status {
+        _,          // 0
+        ACTIVE,     // 1
+        ONHOLD      // 2
+    }
+    // Indexes for _memberWeights array
+    enum Weight {
+        _,          // 0
+        STANDARD,   // 1
+        SENIOR,     // 2
+        ADVISER     // 3
+    }
 
     struct Member {
         Status status;
         Weight weight;
-        // in 300 second units
         uint32 submittedHours;
+        uint16[4] lastSubmittedWeeks;
     }
 
-    // terms of collaboration (keccak256-hash)
-    uint256 private _terms;
-    // weighted-hour-based equity pool, in basis points (0.01%)
-    uint16 private _equity = 8000;
-    // total submitted hours, in 300 second units
+    // sha256 of the terms of collaboration (default: sha256(<32 zero bytes>) which is 0)
+    bytes32 private _terms;
+
+    // weighted-hour-based equity pool in Share Units (default: 80%)
+    uint32 private _equity = 800000000;
+
+    // first week of the project, Week Index (default: the week that started at at 00:00:00 UTC 23-Sep-2019)
+    uint16 private _startWeek = 2595;
+
+    // maximum hours in Time Units allowed for submission by a member per a week
+    uint16 private _maxHoursPerWeek = 55 hours / 5 minutes;
+
+    // Working hours weights for _, STANDARD, SENIOR, ADVISER as a fraction of STANDARD (default: 0, 2/2, 3/2, 4/2)
+    uint8[4] private _memberWeights = [
+        0,  // ignored
+        2,  // STANDARD
+        3,  // SENIOR
+        4   // ADVISER
+    ];
+
+    // total submitted hours in Time Units
     uint32 private _submittedHours;
-    // total weighted submitted hours, in 300 second units
+
+    // submitted hours in Time Units weighted with User Weights
     uint32 private _submittedWeightedHours;
+
+    // Week Indexes of four latest submitted weeks
+    uint16[4] private _latestWeeksSubmitted;
 
     mapping(address => Member) private _members;
 
+    event MemberAdded(address indexed member);
+
+    event MemberStatusModified(address indexed member, Status status);
+
+    // hours in Time Units
     event HoursSubmitted(
         address indexed member,
-        uint8 indexed week,
+        uint16 indexed week,
+        uint16 weightedHours,
         uint16[7] dailyHours
     );
-    event UserWeightAdded(address indexed user, Weight indexed weight);
+
+    event MemberWeightAdded(
+        address indexed user,
+        Weight indexed weight,
+        uint32 weightedHours
+    );
+
     // in basis points (0.01%)
-    event EquityModified(uint16 indexed newEquity);
+    event EquityModified(uint32 indexed newEquity);
 
-    modifier memberDoesNotExist(){
-        require(!_members[msg.sender], "Member already exists!!");
+
+    modifier senderIsNotMember(){
+        require(_members[msg.sender].status == Status._, "Member already exists!!");
         _;
     }
 
-    modifier memberExist(address member){
-        require(_members[member], "Member does not exists!!");
+    modifier memberExists(address member){
+        require(_members[member].status != Status._, "Member does not exists!!");
         _;
     }
 
-    function getTerms() external view returns(uint256) {
+    /**
+    * @dev Constructor, creates Prototype
+    * @dev provide zero value(s) to input param(s) to set default value(s)
+    * @param terms uint256 project terms of collaboration (default: 0)
+    * @param startWeek uint16 project first week as Week Index (default 2595)
+    * @param memberWeights uint[4] weights, as a fraction of STANDARD weight
+    *  default: [0, 2, 3, 4] for _ (ignored), STANDARD, SENIOR, ADVISER
+    */
+    constructor (
+        bytes32 terms,
+        uint16 startWeek,
+        uint32 equity,
+        uint8[4] memory memberWeights
+    ) public {
+        if (terms != 0) {
+            _terms = sha256(abi.encodePacked(terms));
+        }
+        if (startWeek != 0) {
+            require(startWeek <= 3130, "startWeek can't start after 31-Dec-2030");
+            _startWeek = startWeek;
+        }
+        if (equity != 0) {
+            require(equity <= 1000000, "no more 1,000,000 Shares (100%) allowed!!");
+        }
+        if (memberWeights[uint8(Weight.STANDARD)] != 0) {
+            _memberWeights = memberWeights;
+        }
+    }
+
+    function getTerms() external view returns(bytes32) {
         return _terms;
     }
 
-    function getEquity() external view returns(uint16) {
+    function getEquity() external view returns(uint32) {
         return _equity;
     }
 
@@ -61,27 +149,57 @@ contract Prototype is ProjectLeadRole
         return _submittedWeightedHours;
     }
 
+    function getMaxHoursPerWeek() external view returns (uint16) {
+        return _maxHoursPerWeek;
+    }
+
+    function getMemberWeights() external view returns (uint8[4] memory) {
+        return _memberWeights;
+    }
+
     /**
     * @dev Returns whether given user is a member or not
     * @param member address of the member to be checked
     */
     function isMember(address member) external view returns(bool){
-        return _members[member];
+        return _members[member].status != Status._;
+    }
+
+    /**
+    * @dev Returns status of a member
+    * @param member address of the member to be checked
+    * @return Status
+    */
+    function getMemberStatus(address member) external view returns(Status){
+        return _members[member].status;
     }
 
     /**
     * @dev Allows owner of the contract to setup a new equity
     * It may not be greater than previous set equity
-    * @param equity New equity in basis points (0.01%)
+    * @param equity New equity in Share Units
     */
-    function setEquity(uint16 equity) external onlyProjectLead {
+    function setEquity(uint32 equity) external onlyProjectLead {
         require(equity < _equity, "Greater than existing equity!!");
         _equity = equity;
         emit EquityModified(equity);
     }
 
     /**
-    * @dev Set user weight. Can only be done once. Only project lead can call this
+    * @dev Allows project lead to setup a new limit on maximum weekly hours
+    * @param maxHoursPerWeek uint16 maximum weekly hours in Time Units
+    */
+    function setMaxHoursPerWeek(uint16 maxHoursPerWeek)
+        external
+        onlyProjectLead
+    {
+        require(maxHoursPerWeek != 0, "invalid maxHoursPerWeek!!");
+        require(maxHoursPerWeek <= 2016, "too big maxHoursPerWeek!!");
+        _maxHoursPerWeek = maxHoursPerWeek;
+    }
+
+    /**
+    * @dev Set user weight. Can only be done once. Only project lead can call
     * @param user User whose weight has to be set
     * @param weight Weight of the user
     */
@@ -91,113 +209,160 @@ contract Prototype is ProjectLeadRole
     )
         external
         onlyProjectLead
-        memberExist(user)
+        memberExists(user)
     {
-        require(
-            _members[user][weight] == Weight._,
-            "Weight already set for the user!!"
-        );
+        require(_members[user].weight == Weight._, "Weight already set!!");
+        _members[user].weight = weight;
 
-        _members[user][weight] = weight;
+        uint32 weightedHours = _members[user].submittedHours * _memberWeights[uint8(weight)] / _memberWeights[uint8(Weight.STANDARD)];
+        _submittedWeightedHours += weightedHours;
 
-        emit UserWeightAdded(user, weight);
+        emit MemberWeightAdded(user, weight, weightedHours);
     }
 
     /**
     * @dev Returns user weight
     * @param user User whose weight needs to be returned
     */
-    function getUserWeight(address user) external view memberExist(user) returns(Weight) {
-        return _members[user][weight];
+    function getUserWeight(address user)
+        external
+        view
+        memberExists(user)
+    returns(Weight)
+    {
+        return _members[user].weight;
     }
 
     /**
     * @dev Allows a new user to join
+    * @param terms uint256 project terms of collaboration
     */
-    function join(uint256 terms, Status status) external memberDoesNotExist{
-        require(_terms == terms, "Collaboration terms mismatch");
-        _members[msg.sender][status] = status;
+    function join(bytes32 terms)
+        external
+        senderIsNotMember
+    {
+        require(_terms == sha256(abi.encodePacked(terms)), "Terms mismatch!!");
+        _members[msg.sender].status = Status.ACTIVE;
         emit MemberAdded(msg.sender);
+    }
+
+    function setMemberStatus(
+        address member,
+        Status status
+    )
+        external
+        onlyProjectLead
+        memberExists(member)
+    {
+        require(status != Status._, "Invalid status!!");
+        _members[member].status = status;
+        emit MemberStatusModified(member, status);
     }
 
     /**
     * @dev Allows existing members to submit hours
-    * @param week Week as uint8
-    * @param dayHours Time worked each day in a week, in 300 second units
+    * @param week Week as uint16
+    * @param dayHours Time worked each day in a week in Time Units
     */
     function submitHours(
-        uint8 week,
+        uint16 week,
         uint16[7] calldata dayHours
     )
         external
-        memberExist(msg.sender)
+        memberExists(msg.sender)
     {
-        require(_userWeights[msg.sender] != Weight._, "User weight not set!!");
         require(
-            _submittedHours[msg.sender][week].length == 0,
-            "Already submitted for the week!!"
+            _members[msg.sender].status != Status.ONHOLD,
+            "Member is on hold!!"
         );
+        require(dayHours.length == 7, "Invalid dayHours!!");
+        require(week >= _startWeek, "Invalid week (before startWeek)!!");
 
-        require(dayHours.length == 7, "Invalid hours provided!!");
-        uint256 totalSubmittedHours = 0;
+        uint16 currentWeek = uint16((block.timestamp - 345600)/(7 weeks) + 1);
 
-        for (uint256 i = 0; i < dayHours.length; i++) {
-            _submittedHours[msg.sender][week].push(dayHours[i]);
-            totalSubmittedHours = totalSubmittedHours + 1;
+        require(currentWeek > week, "submission for week not yet ended!!");
+        require(currentWeek - week <= 4, "submission closed for this week!!");
+
+        // Check if week is not in four latest weeks submitted
+        uint16 latestWeekFound = 0xFFFF;
+        uint8 indexOfLatestWeek;
+        for (uint8 i; i < 4 && latestWeekFound != 0; i++) {
+            require(week != _latestWeeksSubmitted[i], "Duplicated submission!!");
+            if (_latestWeeksSubmitted[i] < latestWeekFound) {
+                (latestWeekFound, indexOfLatestWeek) = (_latestWeeksSubmitted[i], i);
+            }
         }
-        require(
-            totalSubmittedHours <= 55,
-            "Total submitted houres greater than 55!!"
-        );
+        // Update list of latest weeks
+        _latestWeeksSubmitted[indexOfLatestWeek] = week;
 
-        emit HoursSubmitted(msg.sender, week);
+        uint16 weekHours;
+        for (uint8 i; i < dayHours.length; i++) {
+            weekHours += dayHours[i];
+        }
+        require(weekHours <= _maxHoursPerWeek, "Hours exceed limit!!");
+
+        _members[msg.sender].submittedHours += weekHours;
+        uint16 weightedHours = weekHours * _memberWeights[uint8(_members[msg.sender].weight)] / _memberWeights[uint8(Weight.STANDARD)];
+        _submittedHours += weekHours;
+        _submittedWeightedHours += weightedHours;
+
+        emit HoursSubmitted(
+            msg.sender,
+            week,
+            weightedHours,
+            dayHours
+        );
     }
 
     /**
-    * @dev Returns total number of hours worked in a week by a member
-    * @param memberAddress Address of the member
-    * @param week bytes32 version of the week
+    * @dev Returns total number of hours worked
+    * @param member Address of the member
+    * @return uint32 hours in Time Units
     */
-    function getTotalHours(
-        address memberAddress,
-        bytes32 week
-    )
+    function getSubmittedHours(address member)
         external
         view
-        returns(uint256 sumHours)
+        returns(uint32)
     {
-        for (
-            uint256 i = 0; i < _submittedHours[memberAddress][week].length; i++
-        )
-        {
-            sumHours = sumHours + _submittedHours[memberAddress][week][i];
-        }
-        return sumHours;
+        return _members[member].submittedHours;
     }
 
     /**
-    * @dev Returns each day hour for a given week for a member
-    * @param memberAddress Address of the member
-    * @param week bytes32 version of the week
+    * @dev Returns member share in weighted-hours-based equity pool
+    * @param member Address of the member
+    * @return uint32 equity in ShareUnits
     */
-    function getDayHours(
-        address memberAddress,
-        bytes32 week
-    )
+    function getMemberEquity(address member)
         external
         view
-        returns(uint256[] memory dayHours)
+        returns(uint32)
     {
-        dayHours = new uint256[](7);
+        uint32 memberWeightedHours = _members[member].submittedHours * _memberWeights[uint8(_members[member].weight)] / _memberWeights[uint8(Weight.STANDARD)];
+        return uint32(
+            uint64(_equity) * memberWeightedHours / _submittedWeightedHours
+        );
+    }
 
-        for (
-            uint256 i = 0; i < _submittedHours[memberAddress][week].length; i++
-        )
-        {
-            dayHours[i] = _submittedHours[memberAddress][week][i];
-        }
-        return dayHours;
+    /**
+    * @dev Returns status, weight and submittedHours for a member
+    * @param member Address of the member
+    * @return status Status
+    * @return weight Weight
+    * @return submittedHours uint32 in Time Units
+    */
+    function getMemberData(address member)
+        external
+        view
+        returns (
+            Status status,
+            Weight weight,
+            uint32 submittedHours
+    )
+    {
+        return (
+            _members[member].status,
+            _members[member].weight,
+            _members[member].submittedHours
+        );
     }
 }
-
-// return block.timestamp >= _openingTime && block.timestamp <= _closingTime;

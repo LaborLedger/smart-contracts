@@ -37,7 +37,7 @@
     "type": "git",
     "url": "git+https://gitlab.com/audacity-dao/ethereum.git"
   },
-  "author": "Sameep Singhania",
+  "author": "All Contributors (see AUTHORS.md)",
   "license": "ISC",
   "bugs": {
     "url": "https://gitlab.com/audacity-dao/ethereum/issues"
