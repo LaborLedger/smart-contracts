@@ -38,12 +38,15 @@ contract Prototype is ProjectLeadRole
         Status status;
         Weight weight;
         uint32 submittedHours;
+        // Week Indexes of four latest submitted weeks
         uint16[4] lastSubmittedWeeks;
     }
 
+    // @dev storage slot 1
     // sha256 of the terms of collaboration (default: sha256(<32 zero bytes>) which is 0)
     bytes32 private _terms;
 
+    // @dev storage slot 2
     // weighted-hour-based equity pool in Share Units (default: 80%)
     uint32 private _equity = 800000000;
 
@@ -53,6 +56,13 @@ contract Prototype is ProjectLeadRole
     // maximum hours in Time Units allowed for submission by a member per a week
     uint16 private _maxHoursPerWeek = 55 hours / 5 minutes;
 
+    // total submitted hours in Time Units
+    uint32 private _submittedHours;
+
+    // submitted hours in Time Units weighted with User Weights
+    uint32 private _submittedWeightedHours;
+
+    // @dev storage slot 3
     // Working hours weights for _, STANDARD, SENIOR, ADVISER as a fraction of STANDARD (default: 0, 2/2, 3/2, 4/2)
     uint8[4] private _memberWeights = [
         0,  // ignored
@@ -61,15 +71,7 @@ contract Prototype is ProjectLeadRole
         4   // ADVISER
     ];
 
-    // total submitted hours in Time Units
-    uint32 private _submittedHours;
-
-    // submitted hours in Time Units weighted with User Weights
-    uint32 private _submittedWeightedHours;
-
-    // Week Indexes of four latest submitted weeks
-    uint16[4] private _latestWeeksSubmitted;
-
+    // @dev storage slot 4, ...
     mapping(address => Member) private _members;
 
     event MemberAdded(address indexed member);
@@ -133,12 +135,20 @@ contract Prototype is ProjectLeadRole
         }
     }
 
+    /**
+    * @dev Returns the week of the latest block
+    * @return uint16 week index
+    */
     function getTerms() external view returns(bytes32) {
         return _terms;
     }
 
     function getEquity() external view returns(uint32) {
         return _equity;
+    }
+
+    function getStartWeek() external view returns (uint16) {
+        return _startWeek;
     }
 
     function getSubmittedHours() external view returns(uint32) {
@@ -203,7 +213,7 @@ contract Prototype is ProjectLeadRole
     * @param user User whose weight has to be set
     * @param weight Weight of the user
     */
-    function setUserWeight(
+    function setMemberWeight(
         address user,
         Weight weight
     )
@@ -261,6 +271,10 @@ contract Prototype is ProjectLeadRole
 
     /**
     * @dev Allows existing members to submit hours
+    *   Submissions allowed by members only and for a week that:
+    *   - has not yet been submitted
+    *   - already has ended
+    *   - ended no later then four weeks ago
     * @param week Week as uint16
     * @param dayHours Time worked each day in a week in Time Units
     */
@@ -278,7 +292,7 @@ contract Prototype is ProjectLeadRole
         require(dayHours.length == 7, "Invalid dayHours!!");
         require(week >= _startWeek, "Invalid week (before startWeek)!!");
 
-        uint16 currentWeek = uint16((block.timestamp - 345600)/(7 weeks) + 1);
+        uint16 currentWeek = getCurrentWeek();
 
         require(currentWeek > week, "submission for week not yet ended!!");
         require(currentWeek - week <= 4, "submission closed for this week!!");
@@ -287,13 +301,13 @@ contract Prototype is ProjectLeadRole
         uint16 latestWeekFound = 0xFFFF;
         uint8 indexOfLatestWeek;
         for (uint8 i; i < 4 && latestWeekFound != 0; i++) {
-            require(week != _latestWeeksSubmitted[i], "Duplicated submission!!");
-            if (_latestWeeksSubmitted[i] < latestWeekFound) {
-                (latestWeekFound, indexOfLatestWeek) = (_latestWeeksSubmitted[i], i);
+            require(week != _members[msg.sender].lastSubmittedWeeks[i], "Duplicated submission!!");
+            if (_members[msg.sender].lastSubmittedWeeks[i] < latestWeekFound) {
+                (latestWeekFound, indexOfLatestWeek) = (_members[msg.sender].lastSubmittedWeeks[i], i);
             }
         }
         // Update list of latest weeks
-        _latestWeeksSubmitted[indexOfLatestWeek] = week;
+        _members[msg.sender].lastSubmittedWeeks[indexOfLatestWeek] = week;
 
         uint16 weekHours;
         for (uint8 i; i < dayHours.length; i++) {
@@ -335,12 +349,10 @@ contract Prototype is ProjectLeadRole
     function getMemberEquity(address member)
         external
         view
-        returns(uint32)
+        returns(uint64)
     {
         uint32 memberWeightedHours = _members[member].submittedHours * _memberWeights[uint8(_members[member].weight)] / _memberWeights[uint8(Weight.STANDARD)];
-        return uint32(
-            uint64(_equity) * memberWeightedHours / _submittedWeightedHours
-        );
+        return uint64(_equity) * memberWeightedHours / _submittedWeightedHours;
     }
 
     /**
@@ -365,4 +377,11 @@ contract Prototype is ProjectLeadRole
             _members[member].submittedHours
         );
     }
+
+    function getCurrentWeek() public view returns(uint16) {
+        return uint16((block.timestamp - 345600)/(7 days) + 1);
+    }
 }
+
+// TODO: optimize 'function submitHours' (cycles, read to memory from storage once, ...)
+// TODO: use 'Proxy' pattern and delegateCall from 'storage' to 'logic' contract
