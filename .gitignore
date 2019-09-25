@@ -20,3 +20,8 @@ build/
 # System Files
 .DS_Store
 Thumbs.db
+
+# draft notes
+del.me
+del.me.*
+del.me/
