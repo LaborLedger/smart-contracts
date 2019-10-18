@@ -1,5 +1,8 @@
 module.exports = async function(deployer, network, accounts) {
 
+    // exit silently if in 'manual tests mode'
+    if (process.env._PROTOTYPE_MANUAL) return;
+
     console.warn("2_deploy_contract.js called");
 
     if ( network === "test" ) {
@@ -13,12 +16,12 @@ module.exports = async function(deployer, network, accounts) {
         return;
     }
 
-    const Prototype = artifacts.require("Prototype");
+    const Prototype = artifacts.require("LaborLedger");
 
     // default values applied for all params except for the 'term'
-    deployer.deploy(Prototype, web3.utils.fromAscii('my new contract'), 0, 0, [0,0,0,0])
+    deployer.deploy(Prototype, web3.utils.fromAscii('my new contract'), 0)
     .then(function() {
-        console.log("Prototype contract successfully deployed");
+        console.log("LaborLedger contract successfully deployed");
         console.log(`..at adreess:        ${Prototype.address}`);
     });
 

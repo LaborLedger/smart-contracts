@@ -5,7 +5,8 @@ module.exports = {
     // for Ganache App + 'truffle console --network development'
     development: {
       host: "127.0.0.1",
-      port: 7545,
+      // port: 7545,
+      port: 8555,
       network_id: "*",
       // gasPrice: 20000000000,  // 20 gwei (in wei) (default: 100 gwei)
       // from: <address>,        // Account to send txs from (default: accounts[0])
