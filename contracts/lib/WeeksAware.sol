@@ -13,6 +13,19 @@ contract WeeksAware
     * (N.B.: safeMath lib is not used as expected values are too small to cause overflows)
     */
 
+    // Week Index of the first week of the ledger
+    uint16 public startWeek;
+
+    constructor (uint16 _startWeek) public
+    {
+        if (_startWeek != 0) {
+            require(_startWeek <= 3130, "startWeek must start by 31-Dec-2030");
+            startWeek = _startWeek;
+        } else {
+            startWeek = getCurrentWeek();
+        }
+    }
+
     /**
     * @dev Returns the week of the latest block
     * @return uint16 week index

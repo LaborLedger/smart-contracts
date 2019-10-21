@@ -16,9 +16,27 @@ contract LaborUnitsAware
     // (may be adjusted to account for project value appreciation)
     uint16 constant defaultLaborFactor = 1000;
 
+    // factor to convert hours (weighted with member weights) into labor units
+    // (may be adjusted to account for project value appreciation)
+    uint16 public laborFactor = defaultLaborFactor;
+
+    // total labor units submitted to the ledger (by all members)
+    uint32 public laborUnits;
+
     event LaborUnits(address indexed member, uint32 units);
 
     event LaborUnitsCleared(address indexed member, uint32 units);
 
     event LaborFactorModified(uint16 newFactor);
+
+    function timeUnitsToLaborUnits(uint32 timeUnits) public view returns(uint32) {
+        return timeUnits * laborFactor;
+    }
+
+    function _setLaborFactor(uint16 _laborFactor) internal
+    {
+        require(_laborFactor != 0, "Invalid labor factor");
+        laborFactor = _laborFactor;
+        emit LaborFactorModified(_laborFactor);
+    }
 }

@@ -1,8 +1,5 @@
 pragma solidity 0.5.11;
 
-import "./ProjectLeadRole.sol";
-import "./WeeksAware.sol";
-
 contract MemberWeightAware
 {
     /***  Member weights
@@ -29,8 +26,16 @@ contract MemberWeightAware
     // 1 = 32/32, 1.5 = 48/32 and 2 = 64/32 for STANDARD, SENIOR and ADVISER
     uint32 constant defaultMemberWeights = 32 * 1 + 48 * 256 + 64 * (256 * 256);
 
+    // @dev uint8[4] packed into uint32 to save storage slots
+    uint32 public memberWeights = defaultMemberWeights;
+
     event MemberWeightSet(address indexed member, uint8 weight);
+
     event MemberWeightAccepted(address indexed user, uint8 weight);
+
+    function TimeUnitsToWeightedTimeUnits(uint32 timeUnits, uint8 weight) public pure returns(uint32) {
+        return timeUnits * weight / weightDivider;
+    }
 
     function _packWeights(uint8[4] memory weights) internal pure returns(uint32) {
         return uint32(weights[0]) | uint32(weights[1])<<8 | uint32(weights[2])<<16 | uint32(weights[3])<<24;

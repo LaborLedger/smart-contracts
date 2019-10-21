@@ -26,7 +26,7 @@
   "scripts": {
     "test": "scripts/test.sh",
     "compile": "truffle compile",
-    "flatten": "sh -c '([ -d build/ ] || mkdir build) && truffle-flattener contracts/LaborLedger.sol > build/Prototype.flatten.sol'",
+    "flatten": "sh -c '([ -d build/ ] || mkdir build) && truffle-flattener contracts/LaborLedgerImplementation.sol > build/LaborLedgerImplementation.flatten.sol'",
     "migrate": "truffle migrate",
     "networks": "truffle networks",
     "coverage": "scripts/coverage.sh",

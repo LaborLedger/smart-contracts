@@ -16,7 +16,7 @@ module.exports = async function(deployer, network, accounts) {
         return;
     }
 
-    const Prototype = artifacts.require("LaborLedger");
+    const Prototype = artifacts.require("LaborLedgerImplementation");
 
     // default values applied for all params except for the 'term'
     deployer.deploy(Prototype, web3.utils.fromAscii('my new contract'), 0)

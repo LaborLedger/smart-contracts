@@ -10,7 +10,7 @@ module.exports = async function(deployer, network, accounts) {
         return;
     }
 
-    const Prototype = artifacts.require("LaborLedger");
+    const Prototype = artifacts.require("LaborLedgerImplementation");
 
     // [terms, startWeek, equity, memberWeights]
     deployer.deploy(

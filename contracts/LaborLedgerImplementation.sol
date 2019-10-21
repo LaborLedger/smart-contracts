@@ -1,35 +1,44 @@
 pragma solidity 0.5.11;
 
-import "./ProjectLeadRole.sol";
-import "./WeeksAware.sol";
-import "./MemberWeightAware.sol";
-import "./LaborUnitsAware.sol";
-import "./LaborLedgerStorage.sol";
-import "./TimeUnitsAware.sol";
-import "./LaborShareAware.sol";
+// TODO: add check/revert on max values here and in imported contracts
+// TODO: implement ERC-20-like methods totalSupply and balanceOf for Labor Units, as well as name, symbol, decimals
+// TODO: optimize memory/function variable types to save on gas
+// TODO: implement "mint ERC-20 labor unit tokens" functionality (call external ERC-20 contract)
 
-contract LaborLedger is
-    ProjectLeadRole,
-    TimeUnitsAware,
-    WeeksAware,
-    MemberWeightAware,
-    LaborUnitsAware,
-    LaborShareAware,
-    LaborLedgerStorage
+import "./lib/BirthBlockAware.sol";
+import "./lib/CollaborationAware.sol";
+import "./lib/Erc20TokenLike.sol";
+import "./lib/LaborShareAware.sol";
+import "./lib/LaborUnitsAware.sol";
+import "./lib/LedgerStatusAware.sol";
+import "./lib/MemberDataAware.sol";
+import "./lib/MemberWeightAware.sol";
+import "./RolesAware.sol";
+import "./lib/TimeUnitsAware.sol";
+import "./lib/WeeksAware.sol";
+import "./lib/ProxyPatternAware.sol";
+
+contract LaborLedgerImplementation is
+ProxyPatternAware,
+RolesAware,         // @dev storage slots 0, 1 (mappings)
+MemberDataAware,    // @dev storage slot 2 (mapping)
+LedgerStatusAware,  // @dev storage slot 3
+BirthBlockAware,
+WeeksAware,
+CollaborationAware,
+TimeUnitsAware,     // @dev storage slot 4
+MemberWeightAware,
+LaborUnitsAware,
+LaborShareAware,
+Erc20TokenLike
 {
     /***  Units
     *
-    * Time periods (working hours) are submitted and returned in Time Units (see TimeAware.sol)
-    * Week timestamps are submitted, stored and returned as Week Indexes (see WeeksAware.sol)
-    * Labor-based equity pool is distributed between members in proportion to Labor Units (see LaborUnitsAware.sol)
-    * The share of a member in the labor-based equity pool is measured in Share Units (see LaborShareAware.sol)
-    *
-    * (N.B.: safeMath lib is not used as expected values are too small to cause overflows)
+    * Time periods (working hours) submitted and returned in Time Units (see TimeAwareLedger.sol)
+    * Timestamps (for weeks) submitted, stored and returned as Week Indexes (see WeeksAware.sol)
+    * Labor-based equity pool distributed between members in proportion to Labor Units (see LaborUnitsAware.sol)
+    * The share of a member in the labor-based equity pool measured in Share Units (see LaborShareAware.sol)
     */
-
-    event MemberAdded(address indexed member, uint16 startWeek);
-
-    event MemberStatusModified(address indexed member, Status status);
 
     event TimeSubmitted(
         address indexed member,
@@ -37,79 +46,27 @@ contract LaborLedger is
         uint16[7] weekDays
     );
 
-    modifier senderIsNotMember(){
-        require(_members[msg.sender].status == Status._, "Member already exists");
-        _;
-    }
-
-    modifier memberExists(address member){
-        require(_members[member].status != Status._, "Member does not exists");
-        _;
-    }
-
     /**
     * @dev Constructor, creates LaborLedger
-    * @dev provide zero value(s) to input param(s) to set default value(s)
-    * @param _terms uint256 project terms of collaboration (default: 0)
-    * @param _startWeek uint16 project first week as Week Index (default 2595)
+    * @param _collaboration address Collaboration contract
+    * @param _startWeek uint16 project first week as Week Index (if 0x0 provided, set to current week)
     */
-    constructor (
-        bytes32 _terms,
-        uint16 _startWeek
-    ) public
-    {
-        birthBlock = uint32(block.number);
-        maxTimePerWeek = defaultMaxTimePerWeek;
-        memberWeights = defaultMemberWeights;
-        laborFactor = defaultLaborFactor;
+    constructor (address _collaboration, uint16 _startWeek) public
+        BirthBlockAware()
+        CollaborationAware(_collaboration)
+        WeeksAware(_startWeek)
+    { }
 
-        if (_terms != 0) {
-            terms = sha256(abi.encodePacked(_terms));
-        }
-        if (_startWeek != 0) {
-            require(_startWeek <= 3130, "startWeek must start by 31-Dec-2030");
-            startWeek = _startWeek;
-        } else {
-            startWeek = getCurrentWeek();
-        }
-    }
-
-    /**
-    * @dev Returns whether given user is a member or not
-    * @param member address of the member to be checked
-    */
-    function isMember(address member) external view returns(bool)
-    {
-        return _members[member].status != Status._;
-    }
-
-    /**
-    * @dev Returns status of a member
-    * @param member address of the member to be checked
-    * @return Status
-    */
-    function getMemberStatus(address member) external view returns(Status)
-    {
-        return _members[member].status;
-    }
-
-    function setLaborFactor(uint16 _laborFactor) external
-        onlyProjectLead
-    {
-        require(_laborFactor != 0, "Invalid labor factor");
-        laborFactor = _laborFactor;
-        emit LaborFactorModified(_laborFactor);
+    function setLaborFactor(uint16 _laborFactor) external onlyProjectQuorum {
+        _setLaborFactor(_laborFactor);
     }
 
     /**
     * @dev Allows project lead to setup a new limit on maximum weekly hours
     * @param _maxTimePerWeek uint16 maximum weekly hours in Time Units
     */
-    function setMaxTimePerWeek(uint16 _maxTimePerWeek) external
-        onlyProjectLead
-    {
-        require(_maxTimePerWeek != 0 && _maxTimePerWeek <= 2016, "invalid maxTimePerWeek");
-        maxTimePerWeek = _maxTimePerWeek;
+    function setMaxTimePerWeek(uint16 _maxTimePerWeek) external onlyProjectLead {
+        _setMaxTimePerWeek(_maxTimePerWeek);
     }
 
     /**
@@ -169,16 +126,15 @@ contract LaborLedger is
 
     /**
     * @dev Allows a new user (msg.sender) to join
-    * @param _terms uint256 project terms of collaboration
+    * @param _invite uint256 project terms of collaboration
     */
-    function join(bytes32 _terms, uint16 _startWeek) external
+    function join(bytes32 _invite, uint16 _startWeek) external
         senderIsNotMember
     {
-        require(terms == sha256(abi.encodePacked(_terms)), "Terms mismatch");
-
-        uint16 start = _startWeek;
+        uint16 start;
         if (_members[msg.sender].startWeek != 0) {
             require(_members[msg.sender].startWeek == _startWeek, "_startWeek mismatches");
+            start = _startWeek;
         } else {
             start = getCurrentWeek();
         }
@@ -258,7 +214,7 @@ contract LaborLedger is
         uint32 labor;
         if (_members[msg.sender].status == Status.ACTIVE) {
             timeUnits += time;
-            labor = time * _members[msg.sender].weight / weightDivider * laborFactor;
+            labor = timeUnitsToLaborUnits(TimeUnitsToWeightedTimeUnits(time, _members[msg.sender].weight));
             _members[msg.sender].laborUnits += labor;
             laborUnits += labor;
             emit LaborUnits(msg.sender, labor);
@@ -267,68 +223,11 @@ contract LaborLedger is
     }
 
     /**
-    * @dev Returns the time member worked
-    * @param member Address of the member
-    * @return uint32 time in Time Units
-    */
-    function getMemberTimeUnits(address member) external view returns(uint32)
-    {
-        return _members[member].timeUnits;
-    }
-
-    /**
     * @dev Returns member share in total labor units
     * @param member Address of the member
     * @return uint32 share in Share Units
     */
-    function getMemberShare(address member) external view returns(uint32)
-    {
-        if (laborUnits == 0) {
-            return uint32(0);
-        }
-        return uint32( uint64(1000000) * _members[member].laborUnits / laborUnits);
-    }
-
-    /**
-    * @dev Returns status, weight and timeUnits for a member
-    * @param member Address of the member
-    * @return joinBlock uint32 number ot the block the member joined within
-    * @return status Status
-    * @return weight uint8 in weightDivider(s)
-    * @return timeUnits uint32 in Time Units
-    * @return laborUnits uint32 in Labor Units
-    */
-    function getMemberData(address member) external view
-    returns (
-        Status status,
-        uint8 weight,
-        uint32 timeUnits,
-        uint32 laborUnits,
-        uint32 joinBlock,
-        uint16 startWeek
-    )
-    {
-        return (
-        _members[member].status,
-        _members[member].weight,
-        _members[member].timeUnits,
-        _members[member].laborUnits,
-        _members[member].joinBlock,
-        _members[member].startWeek
-        );
+    function getMemberShare(address member) external view returns(uint32) {
+        return laborUnitsToShareUnits(_members[member].laborUnits, laborUnits);
     }
 }
-
-// TODO: use 'Proxy' pattern and delegateCall from 'storage' to 'logic' contract
-// TODO: optimize 'function submitTime' (cycles, read to memory from storage once, ...)
-// TODO: distinguish "project lead" functions (management competence) vs "DAO" functions ("pooling" competence)
-// TODO: implement "mint labor units tokens" functionality
-// TODO: implement ERC-20-like name, symbol, decimals, totalSupply, balanceOf methods for Labor Units
-
-/*
-function name() public view returns (string)
-function symbol() public view returns (string)
-function decimals() public view returns (uint8)
-function balanceOf(address account) public view returns (uint256)
-function totalSupply() public view returns (uint256)
-*/
