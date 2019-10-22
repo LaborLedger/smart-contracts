@@ -4,7 +4,8 @@ contract BirthBlockAware {
     // Block the contract is deployed in
     uint32 public birthBlock;
 
-    constructor() internal {
+    // @dev "constructor" function that shall be called on the "Proxy Caller" deployment
+    function initBirthBlock() internal {
         birthBlock = uint32(block.number);
     }
 }

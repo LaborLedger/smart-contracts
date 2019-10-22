@@ -24,7 +24,7 @@ contract MemberDataAware
         uint64 latestSubmittedWeeks;
     }
 
-    // @dev see dev notes in ProxyPatternAware.sol before (re-)moving the mapping
+    // @dev see dev notes in ProxyCallerAware.sol before (re-)moving the mapping
     mapping(address => Member) internal _members;
 
     event MemberAdded(address indexed member, uint16 startWeek);

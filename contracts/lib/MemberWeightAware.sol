@@ -27,11 +27,16 @@ contract MemberWeightAware
     uint32 constant defaultMemberWeights = 32 * 1 + 48 * 256 + 64 * (256 * 256);
 
     // @dev uint8[4] packed into uint32 to save storage slots
-    uint32 public memberWeights = defaultMemberWeights;
+    uint32 public memberWeights;
 
     event MemberWeightSet(address indexed member, uint8 weight);
 
     event MemberWeightAccepted(address indexed user, uint8 weight);
+
+    // @dev "constructor" function that shall be called on the "Proxy Caller" deployment
+    function initMemberWeight() internal {
+        memberWeights = defaultMemberWeights;
+    }
 
     function TimeUnitsToWeightedTimeUnits(uint32 timeUnits, uint8 weight) public pure returns(uint32) {
         return timeUnits * weight / weightDivider;
@@ -41,8 +46,8 @@ contract MemberWeightAware
         return uint32(weights[0]) | uint32(weights[1])<<8 | uint32(weights[2])<<16 | uint32(weights[3])<<24;
     }
 
-    function selectWeight(uint32 _packedWeights, Weight _weightIndex) internal pure returns(uint8) {
+    function selectWeight(Weight _weightIndex) internal view returns(uint8) {
         uint8 bits = uint8(_weightIndex) * 8;
-        return uint8(_packedWeights>>bits & 0xFF);
+        return uint8(memberWeights>>bits & 0xFF);
     }
 }

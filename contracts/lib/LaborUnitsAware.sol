@@ -18,7 +18,7 @@ contract LaborUnitsAware
 
     // factor to convert hours (weighted with member weights) into labor units
     // (may be adjusted to account for project value appreciation)
-    uint16 public laborFactor = defaultLaborFactor;
+    uint16 public laborFactor;
 
     // total labor units submitted to the ledger (by all members)
     uint32 public laborUnits;
@@ -28,6 +28,11 @@ contract LaborUnitsAware
     event LaborUnitsCleared(address indexed member, uint32 units);
 
     event LaborFactorModified(uint16 newFactor);
+
+    // @dev "constructor" function that shall be called on the "Proxy Caller" deployment
+    function initLaborUnits() internal {
+        laborFactor = defaultLaborFactor;
+    }
 
     function timeUnitsToLaborUnits(uint32 timeUnits) public view returns(uint32) {
         return timeUnits * laborFactor;

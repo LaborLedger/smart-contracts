@@ -15,7 +15,8 @@ contract RolesAware {
     Roles.Role private _leads;
     Roles.Role private _quorums;
 
-    constructor () internal {
+    // @dev "constructor" function that shall be called on the "Proxy Caller" deployment
+    function initRoles() internal {
         _addProjectLead(msg.sender);
         _addProjectQuorum(msg.sender);
     }

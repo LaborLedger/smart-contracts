@@ -1,8 +1,10 @@
 pragma solidity 0.5.11;
 
 // TODO: add check/revert on max values here and in imported contracts
+// TODO: implement invitation logic
 // TODO: implement ERC-20-like methods totalSupply and balanceOf for Labor Units, as well as name, symbol, decimals
 // TODO: optimize memory/function variable types to save on gas
+// TODO: optimize SLOAD usage (Istanbul update with its EIP 1884 raised SLOAD gas 4 times)
 // TODO: implement "mint ERC-20 labor unit tokens" functionality (call external ERC-20 contract)
 
 import "./lib/BirthBlockAware.sol";
@@ -13,13 +15,13 @@ import "./lib/LaborUnitsAware.sol";
 import "./lib/LedgerStatusAware.sol";
 import "./lib/MemberDataAware.sol";
 import "./lib/MemberWeightAware.sol";
-import "./RolesAware.sol";
+import "./lib/ProxyCallerAware.sol";
+import "./lib/RolesAware.sol";
 import "./lib/TimeUnitsAware.sol";
 import "./lib/WeeksAware.sol";
-import "./lib/ProxyPatternAware.sol";
 
 contract LaborLedgerImplementation is
-ProxyPatternAware,
+ProxyCallerAware,
 RolesAware,         // @dev storage slots 0, 1 (mappings)
 MemberDataAware,    // @dev storage slot 2 (mapping)
 LedgerStatusAware,  // @dev storage slot 3
@@ -47,15 +49,20 @@ Erc20TokenLike
     );
 
     /**
-    * @dev Constructor, creates LaborLedger
+    * @dev "constructor" function that will be delegatecall`ed on deployment of the "Proxy Caller"
     * @param _collaboration address Collaboration contract
     * @param _startWeek uint16 project first week as Week Index (if 0x0 provided, set to current week)
     */
-    constructor (address _collaboration, uint16 _startWeek) public
-        BirthBlockAware()
-        CollaborationAware(_collaboration)
-        WeeksAware(_startWeek)
-    { }
+    function init(address _collaboration, uint16 _startWeek) external {
+        require(birthBlock == uint32(0), "contract already initialized");
+        initBirthBlock();
+        initRoles();
+        initCollaboration(_collaboration);
+        initWeeks(_startWeek);
+        initTimeUnits();
+        initMemberWeight();
+        initLaborUnits();
+    }
 
     function setLaborFactor(uint16 _laborFactor) external onlyProjectQuorum {
         _setLaborFactor(_laborFactor);
@@ -80,7 +87,7 @@ Erc20TokenLike
     {
         require(_members[user].weight == 0, "Weight already set");
 
-        uint8 weight = selectWeight(memberWeights, weightIndex);
+        uint8 weight = selectWeight(weightIndex);
         require(weight != 0, "Invalid weight index");
 
         _members[user].weight = weight;

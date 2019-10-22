@@ -16,7 +16,8 @@ contract WeeksAware
     // Week Index of the first week of the ledger
     uint16 public startWeek;
 
-    constructor (uint16 _startWeek) public
+    // @dev "constructor" function that shall be called on the "Proxy Caller" deployment
+    function initWeeks(uint16 _startWeek) internal
     {
         if (_startWeek != 0) {
             require(_startWeek <= 3130, "startWeek must start by 31-Dec-2030");
