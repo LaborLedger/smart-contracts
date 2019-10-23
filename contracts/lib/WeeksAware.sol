@@ -56,7 +56,7 @@ contract WeeksAware
         uint16 _oldestWeek = 0xFFFF;
         uint8 _indexOfOldestWeek;
 
-        // find the latest week in the list checking if _week is already on the list
+        // checking if _week is already on the list, find the oldest week in the list
         for (uint8 i; i < 4 && _oldestWeek != 0; i++) {
             if (week == _weeks[i]) {
                 return packedList;
@@ -68,10 +68,10 @@ contract WeeksAware
 
         // Replace the oldest week with the new one and pack the array
         _weeks[_indexOfOldestWeek] = week;
-        updatedPackedList  = uint64(_weeks[3])<<48;
-        updatedPackedList |= uint64(_weeks[2])<<32;
+        updatedPackedList  = uint64(_weeks[0]);
         updatedPackedList |= uint64(_weeks[1])<<16;
-        updatedPackedList |= uint64(_weeks[0]);
+        updatedPackedList |= uint64(_weeks[2])<<32;
+        updatedPackedList |= uint64(_weeks[3])<<48;
         return updatedPackedList;
     }
 }
