@@ -39,33 +39,39 @@ contract WeeksAware
     * @dev Check if a week is on a list of four weeks
     *      return unchanged list if the week is on the list
     *      otherwise replace the latest week on the list with the tested week and return the updated list
-    * @param _week uint16 the tested week
-    * @param _packedList uint64 the packed list of four weeks
+    * @param week uint16 the tested week
+    * @param packedList uint64 the packed list of four weeks
     *        (4x uint16 are packed into the single uint64)
-    * @return _updatedPackedList uint64 updated packed list of four weeks
+    * @return updatedPackedList uint64 updated packed list of four weeks
     */
-    function _testWeekAndUpdateFourWeeksList(uint16 _week, uint64 _packedList) internal pure
-    returns(uint64 _updatedPackedList) {
-        uint64 _weeks = _packedList;
-        uint16 latestWeekFound = 0xFFFF;
-        uint8 indexOfLatestWeek;
+    function _testWeekAndUpdateFourWeeksList(uint16 week, uint64 packedList) internal pure
+    returns(uint64 updatedPackedList)
+    {
+        uint16[4] memory _weeks = [
+            uint16(packedList & 0xFFFF),
+            uint16((packedList>>16) & 0xFFFF),
+            uint16((packedList>>32) & 0xFFFF),
+            uint16((packedList>>48) & 0xFFFF)
+        ];
+        uint16 _oldestWeek = 0xFFFF;
+        uint8 _indexOfOldestWeek;
 
         // find the latest week in the list checking if _week is already on the list
-        for (uint8 i; i < 4 && latestWeekFound != 0; i++) {
-            uint16 w = uint16(_weeks & 0xFFFF);
-            if (_week == w) {
-                return _packedList;
+        for (uint8 i; i < 4 && _oldestWeek != 0; i++) {
+            if (week == _weeks[i]) {
+                return packedList;
             }
-            if (w < latestWeekFound) {
-                (latestWeekFound, indexOfLatestWeek) = (w, i);
+            if (_weeks[i] < _oldestWeek) {
+                (_oldestWeek, _indexOfOldestWeek) = (_weeks[i], i);
             }
-            _weeks = _weeks>>16;
         }
 
-        // Update the list of weeks (save _week in the position of the indexOfLatestWeek)
-        uint8 bits = indexOfLatestWeek * 16;
-        _updatedPackedList = _packedList & ~(uint64(0xFFFF)<<bits);
-        _updatedPackedList |= _week<<bits;
-        return _updatedPackedList;
+        // Replace the oldest week with the new one and pack the array
+        _weeks[_indexOfOldestWeek] = week;
+        updatedPackedList  = uint64(_weeks[3])<<48;
+        updatedPackedList |= uint64(_weeks[2])<<32;
+        updatedPackedList |= uint64(_weeks[1])<<16;
+        updatedPackedList |= uint64(_weeks[0]);
+        return updatedPackedList;
     }
 }

@@ -10,6 +10,7 @@ pragma solidity 0.5.11;
 import "./lib/BirthBlockAware.sol";
 import "./lib/CollaborationAware.sol";
 import "./lib/Erc20TokenLike.sol";
+import "./lib/IDelegatecallInit.sol";
 import "./lib/LaborShareAware.sol";
 import "./lib/LaborUnitsAware.sol";
 import "./lib/LedgerStatusAware.sol";
@@ -21,6 +22,7 @@ import "./lib/TimeUnitsAware.sol";
 import "./lib/WeeksAware.sol";
 
 contract LaborLedgerImplementation is
+IDelegatecallInit,
 ProxyCallerAware,
 RolesAware,         // @dev storage slots 0, 1 (mappings)
 MemberDataAware,    // @dev storage slot 2 (mapping)
@@ -48,13 +50,23 @@ Erc20TokenLike
         uint16[7] weekDays
     );
 
+
     /**
     * @dev "constructor" function that will be delegatecall`ed on deployment of the "Proxy Caller"
+    * @param initParams uint256 params for _init
+    */
+    function init(uint256 initParams) external {
+        require(birthBlock == uint32(0), "contract already initialized");
+        address _collaboration = address(initParams >>96);
+        uint16 _startWeek = uint16(initParams & 0xFFFF);
+        _init(_collaboration, _startWeek);
+    }
+
+    /**
     * @param _collaboration address Collaboration contract
     * @param _startWeek uint16 project first week as Week Index (if 0x0 provided, set to current week)
     */
-    function init(address _collaboration, uint16 _startWeek) external {
-        require(birthBlock == uint32(0), "contract already initialized");
+    function _init(address _collaboration, uint16 _startWeek) internal {
         initBirthBlock();
         initRoles();
         initCollaboration(_collaboration);
