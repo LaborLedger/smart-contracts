@@ -14,6 +14,7 @@ module.exports = async function(callback) {
 
     const LaborLedgerImplementation = artifacts.require("LaborLedgerImplementation");
     const LaborLedgerCaller = artifacts.require("LaborLedgerCaller");
+    const Collaboration = artifacts.require("Collaboration");
 
     const [
         defaultAccount,
@@ -21,7 +22,7 @@ module.exports = async function(callback) {
         memberAddress,
         memberAddress2,
         userAddress3,
-        nobody
+        // nobody
     ] = await web3.eth.personal.getAccounts();
     console.log('>>> defaultAccount ', defaultAccount);
     console.log('>>> projectLead ', projectLeadAddress);
@@ -30,11 +31,8 @@ module.exports = async function(callback) {
     console.log('>>> user3 ', userAddress3);
 
     const terms = 'the rest we test';
-    const hashedTerms = web3.utils.fromAscii(terms);
-    const collaboration = nobody;
+    // const hashedTerms = web3.utils.fromAscii(terms);
     const startWeek = 1;
-    const initParams = collaboration + web3.utils.padLeft(startWeek.toString(16), 24).replace('0x', '');
-    if (initParams.length !== 66) throw new Error('invalid initParams');
 
     async function main() {
         while ((await web3.eth.getBlockNumber()) < 2) {
@@ -45,13 +43,19 @@ module.exports = async function(callback) {
 
         let receipt, memberStatus;
 
+        console.log('>>>> Collaboration.new');
+        const collaboration = await Collaboration.new();
+        console.log('    contract address:', collaboration.address);
+        receipt = await web3.eth.getTransactionReceipt(collaboration.transactionHash);
+        console.log(`>> receipt = ${JSON.stringify(receipt, null, 2)}`);
+
         console.log('>>>> LaborLedgerImplementation.new');
         const implementation = await LaborLedgerImplementation.new();
         receipt = await web3.eth.getTransactionReceipt(implementation.transactionHash);
         console.log(`>> receipt = ${JSON.stringify(receipt, null, 2)}`);
 
         console.log('>>>> LaborLedgerCaller.new');
-        const caller = await LaborLedgerCaller.new(implementation.address, collaboration, startWeek);
+        const caller = await LaborLedgerCaller.new(implementation.address, collaboration.address, startWeek);
         receipt = await web3.eth.getTransactionReceipt(caller.transactionHash);
         console.log(`>> receipt = ${JSON.stringify(receipt, null, 2)}`);
 
@@ -74,7 +78,9 @@ module.exports = async function(callback) {
         // receipt = await init(nobody, startWeek).send({from: defaultAccount, gas: 300000});
         // console.log(`>> receipt = ${JSON.stringify(receipt, null, 2)}`);
 
-        console.log('>>>> init second time');
+        console.log('>>>> init');
+        const initParams = collaboration.address + web3.utils.padLeft(startWeek.toString(16), 24).replace('0x', '');
+        if (initParams.length !== 66) throw new Error('invalid initParams');
         await init(initParams).send({from: defaultAccount}).catch(e => console.log(e.reason));
 
         console.log('>>>> addProjectLead');
@@ -113,9 +119,9 @@ module.exports = async function(callback) {
         console.log(`>> receipt = ${JSON.stringify(receipt, null, 2)}`);
 
         console.log('>>>> set invalid statuses to member 2');
-        await setMemberStatus(memberAddress2, 0).send({from: projectLeadAddress}).catch(e => console.log(e.reason))
-        await setMemberStatus(memberAddress2, 1).send({from: projectLeadAddress}).catch(e => console.log(e.reason))
-        await setMemberStatus(memberAddress2, 3).send({from: projectLeadAddress}).catch(e => console.log(e.reason))
+        await setMemberStatus(memberAddress2, 0).send({from: projectLeadAddress}).catch(e => console.log(e.reason));
+        await setMemberStatus(memberAddress2, 1).send({from: projectLeadAddress}).catch(e => console.log(e.reason));
+        await setMemberStatus(memberAddress2, 3).send({from: projectLeadAddress}).catch(e => console.log(e.reason));
 
         console.log('>>>> set weight member 2');
         receipt = await setMemberWeight(memberAddress2, 2).send({from: projectLeadAddress});
@@ -163,7 +169,7 @@ module.exports = async function(callback) {
         console.log('>>> done');
     }
 
-    const cb = (...args) => {console.log('>>>> end'); callback(...args);}
+    const cb = (...args) => {console.log('>>>> end'); callback(...args);};
     try {
         main()
             .catch(console.error)

@@ -9,7 +9,10 @@ pragma solidity 0.5.11;
 
 import "./lib/BirthBlockAware.sol";
 import "./lib/CollaborationAware.sol";
+import "./lib/Constants.sol";
 import "./lib/Erc20TokenLike.sol";
+import "./lib/Erc165Compatible.sol";
+import "./lib/ICollaboration.sol";
 import "./lib/IDelegatecallInit.sol";
 import "./lib/LaborShareAware.sol";
 import "./lib/LaborUnitsAware.sol";
@@ -22,7 +25,9 @@ import "./lib/TimeUnitsAware.sol";
 import "./lib/WeeksAware.sol";
 
 contract LaborLedgerImplementation is
+Constants,
 IDelegatecallInit,
+Erc165Compatible,
 ProxyCallerAware,
 RolesAware,         // @dev storage slots 0, 1 (mappings)
 MemberDataAware,    // @dev storage slot 2 (mapping)
@@ -50,16 +55,18 @@ Erc20TokenLike
         uint16[7] weekDays
     );
 
-
     /**
     * @dev "constructor" function that will be delegatecall`ed on deployment of the "Proxy Caller"
-    * @param initParams uint256 params for _init
+    * @param initParams uint256 packed params for _init
     */
-    function init(uint256 initParams) external {
+    function init(uint256 initParams) external returns(bytes4) {
         require(birthBlock == uint32(0), "contract already initialized");
         address _collaboration = address(initParams >>96);
         uint16 _startWeek = uint16(initParams & 0xFFFF);
         _init(_collaboration, _startWeek);
+        bytes4 result = ICollaboration(_collaboration).logLaborLedger(address(this));
+        require(result == LOGLABORLEDGER__INTERFACE_ID, "LogLaborLager interface unsupported");
+        return INIT_INTERFACE_ID;
     }
 
     /**
@@ -74,6 +81,10 @@ Erc20TokenLike
         initTimeUnits();
         initMemberWeight();
         initLaborUnits();
+    }
+
+    function _supportsInterface(bytes4 interfaceID) private pure returns (bool) {
+        return  interfaceID == INIT_INTERFACE_ID;
     }
 
     function setLaborFactor(uint16 _laborFactor) external onlyProjectQuorum {
