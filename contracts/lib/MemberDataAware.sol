@@ -27,7 +27,7 @@ contract MemberDataAware
     // @dev see dev notes in ProxyCallerAware.sol before (re-)moving the mapping
     mapping(address => Member) internal _members;
 
-    event MemberAdded(address indexed member, uint16 startWeek);
+    event MemberJoined(address indexed member, uint16 startWeek);
 
     event MemberStatusModified(address indexed member, Status status);
 

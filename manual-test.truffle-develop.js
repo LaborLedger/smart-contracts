@@ -30,7 +30,7 @@ module.exports = async function(callback) {
     console.log('>>> member2 ', memberAddress2);
     console.log('>>> user3 ', userAddress3);
 
-    const terms = 'the rest we test';
+    // const terms = 'the rest we test';
     // const hashedTerms = web3.utils.fromAscii(terms);
     const startWeek = 1;
 
@@ -91,7 +91,7 @@ module.exports = async function(callback) {
         await addProjectLead(projectLeadAddress).send({from: defaultAccount}).catch(e => console.log(e.reason));
 
         console.log('>>>> join member');
-        receipt = await join(web3.utils.fromAscii(terms), 0).send({from: memberAddress});
+        receipt = await join(web3.utils.fromAscii('invite1'), 0, 0, 0).send({from: memberAddress});
         console.log(`>> receipt = ${JSON.stringify(receipt, null, 2)}`);
         memberStatus = await getMemberStatus(memberAddress).call();
         console.log(`>> memberStatus = ${memberStatus}`);
@@ -101,7 +101,7 @@ module.exports = async function(callback) {
         console.log(`>> receipt = ${JSON.stringify(receipt, null, 2)}`);
 
         console.log('>>>> join user 3');
-        receipt = await join(web3.utils.fromAscii(terms), 0).send({from: userAddress3});
+        receipt = await join(web3.utils.fromAscii('invite3'), 0, 0, 0).send({from: userAddress3});
         console.log(`>> receipt = ${JSON.stringify(receipt, null, 2)}`);
 
         console.log('>>>> set user 3 status hold');
@@ -115,7 +115,7 @@ module.exports = async function(callback) {
         advanceTimeAndBlock(7 * 24 * 3600);
 
         console.log('>>>> join member 2');
-        receipt = await join(web3.utils.fromAscii(terms), 0).send({from: memberAddress2});
+        receipt = await join(web3.utils.fromAscii('invite2'), 0, 0, 0).send({from: memberAddress2});
         console.log(`>> receipt = ${JSON.stringify(receipt, null, 2)}`);
 
         console.log('>>>> set invalid statuses to member 2');

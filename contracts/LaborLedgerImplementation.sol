@@ -108,6 +108,12 @@ Erc20TokenLike
         onlyProjectLead
         memberExists(user)
     {
+        require(_members[user].status == Status.ONTRIAL, "Set weight allowed for ONTRIAL only");
+        _setMemberWeight(user, weightIndex);
+    }
+
+    function _setMemberWeight(address user, Weight weightIndex) private
+    {
         require(_members[user].weight == 0, "Weight already set");
 
         uint8 weight = selectWeight(weightIndex);
@@ -122,12 +128,18 @@ Erc20TokenLike
         onlyProjectLead
         memberExists(member)
     {
-        require(status != Status._, "Invalid status (unset)");
         require(status != Status.ONTRIAL, "ONTRIAL allowed on join only");
+        _setMemberStatus(member, status);
+    }
+
+    function _setMemberStatus(address member, Status status) private
+    {
+        require(status != Status._, "Invalid status (unset)");
+        require(status != _members[member].status, "Status already set");
         require(_members[member].status != Status.OFFBOARD, "OFFBOARD can't be altered");
+
         if (status == Status.ACTIVE) {
-            require(_members[member].status != Status.ONTRIAL, "ONTRIAL can't be set to ACTIVE");
-            require(_members[member].weight != 0, "ACTIVE not allowed if weight not set");
+            require(_members[member].weight != 0, "Weight is not yet set");
         }
 
         _members[member].status = status;
@@ -136,6 +148,11 @@ Erc20TokenLike
 
     function setMemberStartWeek(address member, uint16 _startWeek) external
         onlyProjectLead
+    {
+        _setMemberStartWeek(member, _startWeek);
+    }
+
+    function _setMemberStartWeek(address member, uint16 _startWeek) private
     {
         require(_members[member].startWeek == 0, 'member startWeek already set');
         require(_startWeek >= startWeek, "_startWeek precedes project startWeek");
@@ -155,51 +172,69 @@ Erc20TokenLike
     }
 
     /**
-    * @dev Allows a new user (msg.sender) to join
+    * @dev Allows a new user (msg.sender) to join and accept startWeek, status and weight
     * @param _invite uint256 project terms of collaboration
     */
-    function join(bytes32 _invite, uint16 _startWeek) external
+    function join(bytes32 _invite, uint16 _startWeek, Status status, Weight weight) external
         senderIsNotMember
     {
-        uint16 start;
-        if (_members[msg.sender].startWeek != 0) {
-            require(_members[msg.sender].startWeek == _startWeek, "_startWeek mismatches");
-            start = _startWeek;
-        } else {
-            start = getCurrentWeek();
+        _join(msg.sender, _invite, _startWeek, status, weight);
+    }
+
+    function _validateAndApplyInvite(bytes32 _invite, uint16 _startWeek, Status status, Weight weight) private
+    {
+        // TODO: realize invite logic
+    }
+
+    function _join(address member, bytes32 _invite, uint16 _startWeek, Status status, Weight weight) private
+    {
+        _validateAndApplyInvite(_invite, _startWeek, status, weight);
+
+        if (_startWeek == 0) {
+            _startWeek = getCurrentWeek();
         }
-        require(start >= startWeek, "_startWeek precedes project startWeek");
+        _setMemberStartWeek(member, _startWeek);
 
-        _members[msg.sender].status = Status.ONTRIAL;
-        _members[msg.sender].joinBlock = uint32(block.number);
-        _members[msg.sender].startWeek = start;
+        if (status == Status._) {
+            status = Status.ONTRIAL;
+        }
+        _setMemberStatus(member, status);
 
-        emit MemberAdded(msg.sender, start);
-        emit MemberStatusModified(msg.sender, Status.ONTRIAL);
+        if (uint8(weight) != 0) {
+            _setMemberWeight(member, weight);
+        }
+
+        _members[member].joinBlock = uint32(block.number);
+
+        emit MemberJoined(member, _startWeek);
     }
 
     /**
-    * @dev Allow a member (msg.sender) to accept the weight set by the project lead
+    * @dev Allow a member on trial (msg.sender) to accept the weight set by the project lead
     * @param weight <uint8> for the member (msg.sender) as a fraction of weightDivider
     */
     function acceptWeight(uint8 weight) external
         memberExists(msg.sender)
     {
-        require(_members[msg.sender].status == Status.ONTRIAL, "Invalid member status");
-        require(_members[msg.sender].weight != 0, "Weight not yet set");
-        require(_members[msg.sender].weight == weight, "Invalid weight");
+        require(_members[msg.sender].status == Status.ONTRIAL, "Accept weight allowed for ONTRIAL only");
+        require(_members[msg.sender].weight != 0, "Weight not set");
+        require(_members[msg.sender].weight == weight, "Weight mismatches");
 
-        _members[msg.sender].status = Status.ACTIVE;
+        _setMemberStatus(msg.sender, Status.ACTIVE);
 
         if (_members[msg.sender].timeUnits != 0) {
-            uint32 units = _members[msg.sender].timeUnits * weight / weightDivider * laborFactor;
-            _members[msg.sender].laborUnits += units;
-            laborUnits += units;
-            emit LaborUnits(msg.sender, units);
+            _countMemberLabourUnits(msg.sender, _members[msg.sender].timeUnits);
         }
 
-        emit MemberStatusModified(msg.sender, Status.ACTIVE);
         emit MemberWeightAccepted(msg.sender, weight);
+    }
+
+    function _countMemberLabourUnits(address member, uint32 _timeUnits) private {
+        timeUnits += _timeUnits;
+        uint32 labor = timeUnitsToLaborUnits(TimeUnitsToWeightedTimeUnits(_timeUnits, _members[member].weight));
+        _members[member].laborUnits += labor;
+        laborUnits += labor;
+        emit LaborUnits(member, labor);
     }
 
     /**
@@ -237,17 +272,12 @@ Erc20TokenLike
         for (uint8 i; i < 7; i++) {
             time += weekDays[i];
         }
-        require(time <= maxTimePerWeek, "Time exceed limit");
+        require(time <= maxTimePerWeek, "Time exceeds limit");
 
         _members[msg.sender].timeUnits += time;
 
-        uint32 labor;
         if (_members[msg.sender].status == Status.ACTIVE) {
-            timeUnits += time;
-            labor = timeUnitsToLaborUnits(TimeUnitsToWeightedTimeUnits(time, _members[msg.sender].weight));
-            _members[msg.sender].laborUnits += labor;
-            laborUnits += labor;
-            emit LaborUnits(msg.sender, labor);
+            _countMemberLabourUnits(msg.sender, time);
         }
         emit TimeSubmitted(msg.sender, week, weekDays);
     }
