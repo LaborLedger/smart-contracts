@@ -47,11 +47,20 @@ contract Prototype is ProjectLeadRole
     bytes32 private _terms;
 
     // @dev storage slot 2
-    // weighted-hour-based equity pool in Share Units (default: 80%)
-    uint32 private _equity = 800000000;
 
-    // first week of the project, Week Index (default: the week that started at at 00:00:00 UTC 23-Sep-2019)
-    uint16 private _startWeek = 2595;
+    // Equity pool measured in Share Units
+    // weighted-hour-based pool (default: 10%)
+    uint32 private _laborEquity = 100000;
+    // management pool (default: 90%)
+    uint32 private _managerEquity = 900000;
+    // investors pool (default: 0%)
+    uint32 private _investorEquity;
+
+    // block the contract is created within
+    uint32 public birthBlock;
+
+    // first week of the project, Week Index
+    uint16 private _startWeek;
 
     // maximum hours in Time Units allowed for submission by a member per a week
     uint16 private _maxHoursPerWeek = 55 hours / 5 minutes;
@@ -92,17 +101,27 @@ contract Prototype is ProjectLeadRole
         uint32 weightedHours
     );
 
-    // in basis points (0.01%)
-    event EquityModified(uint32 indexed newEquity);
+    // in Share Units
+    event EquityModified(
+        uint32 newLaborEquity,
+        uint32 newManagerEquity,
+        uint32 newInvestorEquity
+    );
 
 
     modifier senderIsNotMember(){
-        require(_members[msg.sender].status == Status._, "Member already exists!!");
+        require(
+            _members[msg.sender].status == Status._,
+            "member already exists"
+        );
         _;
     }
 
     modifier memberExists(address member){
-        require(_members[member].status != Status._, "Member does not exists!!");
+        require(
+            _members[member].status != Status._,
+            "member does not exists"
+        );
         _;
     }
 
@@ -111,13 +130,18 @@ contract Prototype is ProjectLeadRole
     * @dev provide zero value(s) to input param(s) to set default value(s)
     * @param terms uint256 project terms of collaboration (default: 0)
     * @param startWeek uint16 project first week as Week Index (default 2595)
+    * @param laborEquity labor equity pool in Share Units
+    * @param managerEquity manager equity pool in Share Units
+    * @param investorEquity investor equity pool in Share Units
     * @param memberWeights uint[4] weights, as a fraction of STANDARD weight
     *  default: [0, 2, 3, 4] for _ (ignored), STANDARD, SENIOR, ADVISER
     */
     constructor (
         bytes32 terms,
         uint16 startWeek,
-        uint32 equity,
+        uint32 laborEquity,
+        uint32 managerEquity,
+        uint32 investorEquity,
         uint8[4] memory memberWeights
     ) public {
         if (terms != 0) {
@@ -126,25 +150,29 @@ contract Prototype is ProjectLeadRole
         if (startWeek != 0) {
             require(startWeek <= 3130, "startWeek can't start after 31-Dec-2030");
             _startWeek = startWeek;
+        } else {
+            _startWeek = getCurrentWeek() - 1;
         }
-        if (equity != 0) {
-            require(equity <= 1000000, "no more 1,000,000 Shares (100%) allowed!!");
+
+        if (laborEquity != 0 || managerEquity != 0 || investorEquity != 0) {
+            _setEquity(laborEquity, managerEquity, investorEquity);
         }
+
         if (memberWeights[uint8(Weight.STANDARD)] != 0) {
             _memberWeights = memberWeights;
         }
+
+        birthBlock = uint32(block.number);
     }
 
-    /**
-    * @dev Returns the week of the latest block
-    * @return uint16 week index
-    */
     function getTerms() external view returns(bytes32) {
         return _terms;
     }
 
-    function getEquity() external view returns(uint32) {
-        return _equity;
+    function getEquity() external view
+    returns(uint32 laborEquity, uint32 managerEquity, uint32 investorEquity)
+    {
+        return (_laborEquity, _managerEquity, _investorEquity);
     }
 
     function getStartWeek() external view returns (uint16) {
@@ -187,12 +215,17 @@ contract Prototype is ProjectLeadRole
     /**
     * @dev Allows owner of the contract to setup a new equity
     * It may not be greater than previous set equity
-    * @param equity New equity in Share Units
+    * @param laborEquity New labor equity pool in Share Units
+    * @param managerEquity New manager equity pool in Share Units
+    * @param investorEquity New investor equity pool in Share Units
     */
-    function setEquity(uint32 equity) external onlyProjectLead {
-        require(equity < _equity, "Greater than existing equity!!");
-        _equity = equity;
-        emit EquityModified(equity);
+    function setEquity(
+        uint32 laborEquity,
+        uint32 managerEquity,
+        uint32 investorEquity
+    ) external onlyProjectLead
+    {
+        _setEquity(laborEquity, managerEquity, investorEquity);
     }
 
     /**
@@ -203,8 +236,8 @@ contract Prototype is ProjectLeadRole
         external
         onlyProjectLead
     {
-        require(maxHoursPerWeek != 0, "invalid maxHoursPerWeek!!");
-        require(maxHoursPerWeek <= 2016, "too big maxHoursPerWeek!!");
+        require(maxHoursPerWeek != 0, "invalid maxHoursPerWeek");
+        require(maxHoursPerWeek <= 2016, "too big maxHoursPerWeek");
         _maxHoursPerWeek = maxHoursPerWeek;
     }
 
@@ -221,7 +254,7 @@ contract Prototype is ProjectLeadRole
         onlyProjectLead
         memberExists(user)
     {
-        require(_members[user].weight == Weight._, "Weight already set!!");
+        require(_members[user].weight == Weight._, "weight already set");
         _members[user].weight = weight;
 
         uint32 weightedHours = _members[user].submittedHours * _memberWeights[uint8(weight)] / _memberWeights[uint8(Weight.STANDARD)];
@@ -251,7 +284,7 @@ contract Prototype is ProjectLeadRole
         external
         senderIsNotMember
     {
-        require(_terms == sha256(abi.encodePacked(terms)), "Terms mismatch!!");
+        require(_terms == sha256(abi.encodePacked(terms)), "terms mismatch");
         _members[msg.sender].status = Status.ACTIVE;
         emit MemberAdded(msg.sender);
     }
@@ -264,7 +297,7 @@ contract Prototype is ProjectLeadRole
         onlyProjectLead
         memberExists(member)
     {
-        require(status != Status._, "Invalid status!!");
+        require(status != Status._, "invalid status");
         _members[member].status = status;
         emit MemberStatusModified(member, status);
     }
@@ -289,19 +322,22 @@ contract Prototype is ProjectLeadRole
             _members[msg.sender].status != Status.ONHOLD,
             "Member is on hold!!"
         );
-        require(dayHours.length == 7, "Invalid dayHours!!");
-        require(week >= _startWeek, "Invalid week (before startWeek)!!");
+        require(dayHours.length == 7, "invalid dayHours");
+        require(week >= _startWeek, "invalid week (before startWeek)");
 
         uint16 currentWeek = getCurrentWeek();
 
-        require(currentWeek > week, "submission for week not yet ended!!");
-        require(currentWeek - week <= 4, "submission closed for this week!!");
+        require(currentWeek > week, "submission for week not yet ended");
+        require(currentWeek - week <= 4, "submission closed for this week");
 
         // Check if week is not in four latest weeks submitted
         uint16 latestWeekFound = 0xFFFF;
         uint8 indexOfLatestWeek;
         for (uint8 i; i < 4 && latestWeekFound != 0; i++) {
-            require(week != _members[msg.sender].lastSubmittedWeeks[i], "Duplicated submission!!");
+            require(
+                week != _members[msg.sender].lastSubmittedWeeks[i],
+                "duplicated submission"
+            );
             if (_members[msg.sender].lastSubmittedWeeks[i] < latestWeekFound) {
                 (latestWeekFound, indexOfLatestWeek) = (_members[msg.sender].lastSubmittedWeeks[i], i);
             }
@@ -313,7 +349,7 @@ contract Prototype is ProjectLeadRole
         for (uint8 i; i < dayHours.length; i++) {
             weekHours += dayHours[i];
         }
-        require(weekHours <= _maxHoursPerWeek, "Hours exceed limit!!");
+        require(weekHours <= _maxHoursPerWeek, "hours exceed limit");
 
         _members[msg.sender].submittedHours += weekHours;
         uint16 weightedHours = weekHours * _memberWeights[uint8(_members[msg.sender].weight)] / _memberWeights[uint8(Weight.STANDARD)];
@@ -352,7 +388,7 @@ contract Prototype is ProjectLeadRole
         returns(uint64)
     {
         uint32 memberWeightedHours = _members[member].submittedHours * _memberWeights[uint8(_members[member].weight)] / _memberWeights[uint8(Weight.STANDARD)];
-        return uint64(_equity) * memberWeightedHours / _submittedWeightedHours;
+        return uint64(_laborEquity) * memberWeightedHours / _submittedWeightedHours;
     }
 
     /**
@@ -378,8 +414,31 @@ contract Prototype is ProjectLeadRole
         );
     }
 
+    /**
+    * @dev Returns the week of the latest block
+    * @return uint16 week index
+    */
     function getCurrentWeek() public view returns(uint16) {
         return uint16((block.timestamp - 345600)/(7 days) + 1);
+    }
+
+    function _setEquity(
+        uint32 laborEquity,
+        uint32 managerEquity,
+        uint32 investorEquity
+    ) internal {
+        require(
+            managerEquity <= _managerEquity,
+            "management equity can't increase"
+        );
+
+        uint totalEquity = laborEquity + managerEquity + investorEquity;
+        require(totalEquity == 1000000, "equity must sum to 1000000 (100%)");
+
+        _laborEquity = laborEquity;
+        _managerEquity = managerEquity;
+        _investorEquity = investorEquity;
+        emit EquityModified(laborEquity, managerEquity, investorEquity);
     }
 }
 
