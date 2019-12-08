@@ -1,9 +1,22 @@
-pragma solidity 0.5.11;
+pragma solidity 0.5.13;
 
-import "./ProjectLeadRole.sol";
+import "./lib/CollaborationAware.sol";
+import "./lib/Constants.sol";
+import "./lib/DelegatecallInitAware.sol";
+import "./lib/Erc165Compatible.sol";
+import "./lib/ICollaboration.sol";
+import "./lib/ProxyCallerAware.sol";
+import "./lib/RolesAware.sol";
+import "./lib/UnpackedInitParamsAware.sol";
 
-
-contract Prototype is ProjectLeadRole
+contract LaborLedgerImplementation is
+ProxyCallerAware,
+RolesAware,         // @dev storage slots 0, 1 (mappings)
+Constants,
+Erc165Compatible,
+UnpackedInitParamsAware,
+DelegatecallInitAware,
+CollaborationAware
 {
     /***  Units and Week Indexes
     *
@@ -26,7 +39,7 @@ contract Prototype is ProjectLeadRole
         ACTIVE,     // 1
         ONHOLD      // 2
     }
-    // Indexes for _memberWeights array
+    // Indexes for memberWeights array
     enum Weight {
         _,          // 0
         STANDARD,   // 1
@@ -44,36 +57,36 @@ contract Prototype is ProjectLeadRole
 
     // @dev storage slot 1
     // sha256 of the terms of collaboration (default: sha256(<32 zero bytes>) which is 0)
-    bytes32 private _terms;
+    bytes32 public terms;
 
     // @dev storage slot 2
 
     // Equity pool measured in Share Units
     // weighted-hour-based pool (default: 10%)
-    uint32 private _laborEquity = 100000;
+    uint32 public laborEquity = 100000;
     // management pool (default: 90%)
-    uint32 private _managerEquity = 900000;
+    uint32 public managerEquity = 900000;
     // investors pool (default: 0%)
-    uint32 private _investorEquity;
+    uint32 public investorEquity;
 
     // block the contract is created within
     uint32 public birthBlock;
 
     // first week of the project, Week Index
-    uint16 private _startWeek;
+    uint16 public startWeek;
 
     // maximum hours in Time Units allowed for submission by a member per a week
-    uint16 private _maxHoursPerWeek = 55 hours / 5 minutes;
+    uint16 public maxHoursPerWeek = 55 hours / 5 minutes;
 
     // total submitted hours in Time Units
-    uint32 private _submittedHours;
+    uint32 public submittedHours;
 
     // submitted hours in Time Units weighted with User Weights
-    uint32 private _submittedWeightedHours;
+    uint32 public submittedWeightedHours;
 
     // @dev storage slot 3
     // Working hours weights for _, STANDARD, SENIOR, ADVISER as a fraction of STANDARD (default: 0, 2/2, 3/2, 4/2)
-    uint8[4] private _memberWeights = [
+    uint8[4] public memberWeights = [
         0,  // ignored
         2,  // STANDARD
         3,  // SENIOR
@@ -126,73 +139,73 @@ contract Prototype is ProjectLeadRole
     }
 
     /**
-    * @dev Constructor, creates Prototype
-    * @dev provide zero value(s) to input param(s) to set default value(s)
-    * @param terms uint256 project terms of collaboration (default: 0)
-    * @param startWeek uint16 project first week as Week Index (default 2595)
-    * @param laborEquity labor equity pool in Share Units
-    * @param managerEquity manager equity pool in Share Units
-    * @param investorEquity investor equity pool in Share Units
-    * @param memberWeights uint[4] weights, as a fraction of STANDARD weight
-    *  default: [0, 2, 3, 4] for _ (ignored), STANDARD, SENIOR, ADVISER
+    * @dev "constructor" that will be delegatecall`ed on deployment of a LaborLedgerCaller
+    * @param initParams <bytes> packed params for _init
     */
-    constructor (
-        bytes32 terms,
-        uint16 startWeek,
-        uint32 laborEquity,
-        uint32 managerEquity,
-        uint32 investorEquity,
-        uint8[4] memory memberWeights
-    ) public {
+    function init(bytes calldata initParams) external returns(bytes4) {
+        require(birthBlock == uint32(0), "contract already initialized");
+        _init(initParams);
+        return INIT_INTERFACE_ID;
+    }
+
+    /**
+    * @param initParams <bytes> packed init params
+    * @dev params packed into `bytes` (96 bytes):
+    *   _collaboration <address> Collaboration contract
+    *   _terms <bytes32> project terms of collaboration (default: 0)
+    *   _startWeek <uint16> project first week as Week Index (default - previous week)
+    *   _managerEquity <uint32> manager equity pool in Share Units (default 9000000)
+    *   _investorEquity <uint32> investor equity pool in Share Units (default 0)
+    *   _memberWeights <uint[4]> weights, as a fraction of the STANDARD weight
+    *     default: [0, 2, 3, 4] for _ (ignored), STANDARD, SENIOR, ADVISER
+    *
+    *   _collaboration is the only mandatory param
+    *   ... provide zero value(s) for any other param(s) to set default value(s)
+    */
+    function _init(bytes memory initParams) internal {
+        (
+            address _collaboration,
+            bytes32 _terms,
+            uint16 _startWeek,
+            uint32 _managerEquity,
+            uint32 _investorEquity,
+            uint8[4] memory _memberWeights
+        ) = unpackInitParams(initParams);
+
+        initRoles();
+
+        bytes4 result = ICollaboration(_collaboration).logLaborLedger(address(this));
+        require(result == LOGLABORLEDGER__INTERFACE_ID, "LogLaborLager interface unsupported");
+        initCollaboration(_collaboration);
+
         if (terms != 0) {
-            _terms = sha256(abi.encodePacked(terms));
+            terms = sha256(abi.encodePacked(_terms));
         }
-        if (startWeek != 0) {
-            require(startWeek <= 3130, "startWeek can't start after 31-Dec-2030");
-            _startWeek = startWeek;
+        if (_startWeek != 0) {
+            require(_startWeek <= 3130, "startWeek can't start after 31-Dec-2030");
+            startWeek = _startWeek;
         } else {
-            _startWeek = getCurrentWeek() - 1;
+            startWeek = getCurrentWeek() - 1;
         }
 
-        if (laborEquity != 0 || managerEquity != 0 || investorEquity != 0) {
-            _setEquity(laborEquity, managerEquity, investorEquity);
+        if (_managerEquity != 0 || _investorEquity != 0) {
+            uint32 _laborEquity = 1000000 - _managerEquity - _investorEquity;
+            _setEquity(_laborEquity, _managerEquity, _investorEquity);
         }
 
-        if (memberWeights[uint8(Weight.STANDARD)] != 0) {
-            _memberWeights = memberWeights;
+        if (_memberWeights[uint8(Weight.STANDARD)] != 0) {
+            memberWeights = _memberWeights;
         }
 
         birthBlock = uint32(block.number);
     }
 
-    function getTerms() external view returns(bytes32) {
-        return _terms;
-    }
-
-    function getEquity() external view
-    returns(uint32 laborEquity, uint32 managerEquity, uint32 investorEquity)
-    {
-        return (_laborEquity, _managerEquity, _investorEquity);
-    }
-
-    function getStartWeek() external view returns (uint16) {
-        return _startWeek;
-    }
-
-    function getSubmittedHours() external view returns(uint32) {
-        return _submittedHours;
-    }
-
-    function getSubmittedWeightedHours() external view returns(uint32) {
-        return _submittedWeightedHours;
-    }
-
-    function getMaxHoursPerWeek() external view returns (uint16) {
-        return _maxHoursPerWeek;
-    }
-
-    function getMemberWeights() external view returns (uint8[4] memory) {
-        return _memberWeights;
+    function getEquity() external view returns(
+        uint32 laborEquityPool,
+        uint32 managerEquityPool,
+        uint32 investorEquityPool
+    ) {
+        return (laborEquity, managerEquity, investorEquity);
     }
 
     /**
@@ -215,30 +228,30 @@ contract Prototype is ProjectLeadRole
     /**
     * @dev Allows owner of the contract to setup a new equity
     * It may not be greater than previous set equity
-    * @param laborEquity New labor equity pool in Share Units
-    * @param managerEquity New manager equity pool in Share Units
-    * @param investorEquity New investor equity pool in Share Units
+    * @param _laborEquity New labor equity pool in Share Units
+    * @param _managerEquity New manager equity pool in Share Units
+    * @param _investorEquity New investor equity pool in Share Units
     */
     function setEquity(
-        uint32 laborEquity,
-        uint32 managerEquity,
-        uint32 investorEquity
+        uint32 _laborEquity,
+        uint32 _managerEquity,
+        uint32 _investorEquity
     ) external onlyProjectLead
     {
-        _setEquity(laborEquity, managerEquity, investorEquity);
+        _setEquity(_laborEquity, _managerEquity, _investorEquity);
     }
 
     /**
     * @dev Allows project lead to setup a new limit on maximum weekly hours
-    * @param maxHoursPerWeek uint16 maximum weekly hours in Time Units
+    * @param _maxHoursPerWeek uint16 maximum weekly hours in Time Units
     */
-    function setMaxHoursPerWeek(uint16 maxHoursPerWeek)
+    function setMaxHoursPerWeek(uint16 _maxHoursPerWeek)
         external
         onlyProjectLead
     {
-        require(maxHoursPerWeek != 0, "invalid maxHoursPerWeek");
-        require(maxHoursPerWeek <= 2016, "too big maxHoursPerWeek");
-        _maxHoursPerWeek = maxHoursPerWeek;
+        require(_maxHoursPerWeek != 0, "invalid maxHoursPerWeek");
+        require(_maxHoursPerWeek <= 2016, "too big maxHoursPerWeek");
+        maxHoursPerWeek = maxHoursPerWeek;
     }
 
     /**
@@ -257,8 +270,8 @@ contract Prototype is ProjectLeadRole
         require(_members[user].weight == Weight._, "weight already set");
         _members[user].weight = weight;
 
-        uint32 weightedHours = _members[user].submittedHours * _memberWeights[uint8(weight)] / _memberWeights[uint8(Weight.STANDARD)];
-        _submittedWeightedHours += weightedHours;
+        uint32 weightedHours = _members[user].submittedHours * memberWeights[uint8(weight)] / memberWeights[uint8(Weight.STANDARD)];
+        submittedWeightedHours += weightedHours;
 
         emit MemberWeightAdded(user, weight, weightedHours);
     }
@@ -278,13 +291,13 @@ contract Prototype is ProjectLeadRole
 
     /**
     * @dev Allows a new user to join
-    * @param terms uint256 project terms of collaboration
+    * @param _terms uint256 project terms of collaboration
     */
-    function join(bytes32 terms)
+    function join(bytes32 _terms)
         external
         senderIsNotMember
     {
-        require(_terms == sha256(abi.encodePacked(terms)), "terms mismatch");
+        require(terms == sha256(abi.encodePacked(_terms)), "terms mismatch");
         _members[msg.sender].status = Status.ACTIVE;
         emit MemberAdded(msg.sender);
     }
@@ -323,7 +336,7 @@ contract Prototype is ProjectLeadRole
             "Member is on hold!!"
         );
         require(dayHours.length == 7, "invalid dayHours");
-        require(week >= _startWeek, "invalid week (before startWeek)");
+        require(week >= startWeek, "invalid week (before startWeek)");
 
         uint16 currentWeek = getCurrentWeek();
 
@@ -349,12 +362,12 @@ contract Prototype is ProjectLeadRole
         for (uint8 i; i < dayHours.length; i++) {
             weekHours += dayHours[i];
         }
-        require(weekHours <= _maxHoursPerWeek, "hours exceed limit");
+        require(weekHours <= maxHoursPerWeek, "hours exceed limit");
 
         _members[msg.sender].submittedHours += weekHours;
-        uint16 weightedHours = weekHours * _memberWeights[uint8(_members[msg.sender].weight)] / _memberWeights[uint8(Weight.STANDARD)];
-        _submittedHours += weekHours;
-        _submittedWeightedHours += weightedHours;
+        uint16 weightedHours = weekHours * memberWeights[uint8(_members[msg.sender].weight)] / memberWeights[uint8(Weight.STANDARD)];
+        submittedHours += weekHours;
+        submittedWeightedHours += weightedHours;
 
         emit HoursSubmitted(
             msg.sender,
@@ -387,8 +400,9 @@ contract Prototype is ProjectLeadRole
         view
         returns(uint64)
     {
-        uint32 memberWeightedHours = _members[member].submittedHours * _memberWeights[uint8(_members[member].weight)] / _memberWeights[uint8(Weight.STANDARD)];
-        return uint64(_laborEquity) * memberWeightedHours / _submittedWeightedHours;
+        require(submittedWeightedHours != 0, "no hours submitted yet");
+        uint32 memberWeightedHours = _members[member].submittedHours * memberWeights[uint8(_members[member].weight)] / memberWeights[uint8(Weight.STANDARD)];
+        return uint64(laborEquity) * memberWeightedHours / submittedWeightedHours;
     }
 
     /**
@@ -423,24 +437,25 @@ contract Prototype is ProjectLeadRole
     }
 
     function _setEquity(
-        uint32 laborEquity,
-        uint32 managerEquity,
-        uint32 investorEquity
+        uint32 _laborEquity,
+        uint32 _managerEquity,
+        uint32 _investorEquity
     ) internal {
         require(
-            managerEquity <= _managerEquity,
+            _managerEquity <= managerEquity,
             "management equity can't increase"
         );
 
-        uint totalEquity = laborEquity + managerEquity + investorEquity;
+        uint totalEquity = _laborEquity + _managerEquity + _investorEquity;
         require(totalEquity == 1000000, "equity must sum to 1000000 (100%)");
 
-        _laborEquity = laborEquity;
-        _managerEquity = managerEquity;
-        _investorEquity = investorEquity;
-        emit EquityModified(laborEquity, managerEquity, investorEquity);
+        laborEquity = _laborEquity;
+        managerEquity = _managerEquity;
+        investorEquity = _investorEquity;
+        emit EquityModified(_laborEquity, _managerEquity, _investorEquity);
     }
 }
 
+// TODO: optimize function params to cut gas spent on bitwise operations
+// TODO: minimize sload sstore operations
 // TODO: optimize 'function submitHours' (cycles, read to memory from storage once, ...)
-// TODO: use 'Proxy' pattern and delegateCall from 'storage' to 'logic' contract
