@@ -5,6 +5,18 @@ with newly created 'truffle develop' network
 $ truffle exec manual-test.truffle-develop.js --network truffle --compile
 */
 
+/*
+let collaboration = await Collaboration.new()
+let implementation = await LaborLedgerImplementation.new()
+let packUnpack = await MockPackUnpack.new()
+let initParams = await packUnpack.pack(collaboration.address, web3.utils.fromAscii('the rest we test'), 2558, 400000, 300000, [1,2,3,4])
+await implementation.init(initParams)
+
+let inst = await LaborLedgerCaller.new(implementation.address, collaboration.address, web3.utils.fromAscii('the rest we test'), 2558, 400000, 300000, [1,2,3,4])
+
+*/
+
+
 const {advanceBlock, advanceTimeAndBlock} = require('./scripts/truffle-test-helper')(web3);
 const unixTimeNow = Number.parseInt(`${Date.now() / 1000}`);
 const weekNow = Math.floor((unixTimeNow - 345600) / (7 * 24 * 3600)) + 1;

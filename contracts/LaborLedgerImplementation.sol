@@ -4,19 +4,18 @@ import "./lib/CollaborationAware.sol";
 import "./lib/Constants.sol";
 import "./lib/DelegatecallInitAware.sol";
 import "./lib/Erc165Compatible.sol";
-import "./lib/ICollaboration.sol";
-import "./lib/ProxyCallerAware.sol";
+// import "./lib/ProxyCallerAware.sol";
 import "./lib/RolesAware.sol";
 import "./lib/UnpackedInitParamsAware.sol";
 
 contract LaborLedgerImplementation is
-ProxyCallerAware,
-RolesAware,         // @dev storage slots 0, 1 (mappings)
+// ProxyCallerAware,
 Constants,
 Erc165Compatible,
 UnpackedInitParamsAware,
 DelegatecallInitAware,
-CollaborationAware
+RolesAware,                 // @dev storage slots 0, 1 (mappings)
+CollaborationAware          // @dev storage slot 2
 {
     /***  Units and Week Indexes
     *
@@ -55,18 +54,18 @@ CollaborationAware
         uint16[4] lastSubmittedWeeks;
     }
 
-    // @dev storage slot 1
+    // @dev storage slot 3
     // sha256 of the terms of collaboration (default: sha256(<32 zero bytes>) which is 0)
     bytes32 public terms;
 
-    // @dev storage slot 2
+    // @dev storage slot 4
 
     // Equity pool measured in Share Units
-    // weighted-hour-based pool (default: 10%)
-    uint32 public laborEquity = 100000;
-    // management pool (default: 90%)
-    uint32 public managerEquity = 900000;
-    // investors pool (default: 0%)
+    // weighted-hour-based pool
+    uint32 public laborEquity;
+    // management pool
+    uint32 public managerEquity;
+    // investors pool
     uint32 public investorEquity;
 
     // block the contract is created within
@@ -76,7 +75,7 @@ CollaborationAware
     uint16 public startWeek;
 
     // maximum hours in Time Units allowed for submission by a member per a week
-    uint16 public maxHoursPerWeek = 55 hours / 5 minutes;
+    uint16 public maxHoursPerWeek;
 
     // total submitted hours in Time Units
     uint32 public submittedHours;
@@ -84,16 +83,11 @@ CollaborationAware
     // submitted hours in Time Units weighted with User Weights
     uint32 public submittedWeightedHours;
 
-    // @dev storage slot 3
-    // Working hours weights for _, STANDARD, SENIOR, ADVISER as a fraction of STANDARD (default: 0, 2/2, 3/2, 4/2)
-    uint8[4] public memberWeights = [
-        0,  // ignored
-        2,  // STANDARD
-        3,  // SENIOR
-        4   // ADVISER
-    ];
+    // @dev storage slot 5
+    // Working hours weights for _, STANDARD, SENIOR, ADVISER as a fraction of STANDARD
+    uint8[4] public memberWeights;
 
-    // @dev storage slot 4, ...
+    // @dev storage slot 6, ...
     mapping(address => Member) private _members;
 
     event MemberAdded(address indexed member);
@@ -172,13 +166,10 @@ CollaborationAware
             uint8[4] memory _memberWeights
         ) = unpackInitParams(initParams);
 
+        initCollaboration(_collaboration);
         initRoles();
 
-        bytes4 result = ICollaboration(_collaboration).logLaborLedger(address(this));
-        require(result == LOGLABORLEDGER__INTERFACE_ID, "LogLaborLager interface unsupported");
-        initCollaboration(_collaboration);
-
-        if (terms != 0) {
+        if (_terms != 0) {
             terms = sha256(abi.encodePacked(_terms));
         }
         if (_startWeek != 0) {
@@ -191,12 +182,23 @@ CollaborationAware
         if (_managerEquity != 0 || _investorEquity != 0) {
             uint32 _laborEquity = 1000000 - _managerEquity - _investorEquity;
             _setEquity(_laborEquity, _managerEquity, _investorEquity);
+        } else {
+            // default laborEquity, managerEquity, investorEquity
+            _setEquity(100000, 900000, 0);
         }
 
         if (_memberWeights[uint8(Weight.STANDARD)] != 0) {
             memberWeights = _memberWeights;
+        } else {
+            // default (as a fraction of STANDARD: 0, 2/2, 3/2, 4/2)
+            memberWeights = [
+                0,  // ignored
+                2,  // STANDARD
+                3,  // SENIOR
+                4   // ADVISER
+            ];
         }
-
+        maxHoursPerWeek = 55 hours / 5 minutes;
         birthBlock = uint32(block.number);
     }
 

@@ -6,10 +6,23 @@ import "./lib/PackedInitParamsAware.sol";
 contract LaborLedgerCaller is PackedInitParamsAware, ExtendedProxy {
 
     // @dev this contract expects the implementation contract NEVER writes in storage slots 0 and 1
-    address private _implementation;    // @dev storage slot 0
-    address public implementor;         // @dev storage slot 1
+    address public implementor;         // @dev storage slot 0
+    address private _implementation;    // @dev storage slot 1
     // @dev be aware the implementation contract overwrites slots following the slot 1
 
+    /**
+     * @param implementation <address> instance of LaborLedgerImplementation contract
+     * @param _collaboration <address> instance of Collaboration contract
+     * @param _terms <bytes32> project terms of collaboration (default: 0)
+     * @param _startWeek <uint16> project first week as Week Index (default - previous week)
+     * @param _managerEquity <uint32> manager equity pool in Share Units (default 9000000)
+     * @param _investorEquity <uint32> investor equity pool in Share Units (default 0)
+     * @param _weights <uint[4]> weights, as a fraction of the STANDARD weight
+     *     default: [0, 2, 3, 4] for _ (ignored), STANDARD, SENIOR, ADVISER
+     *
+     *  @dev _collaboration is the only mandatory param
+     *       ... provide zero value(s) for any other param(s) to set default value(s)
+     */
     constructor (
         address implementation,
         address _collaboration,
@@ -48,9 +61,9 @@ contract LaborLedgerCaller is PackedInitParamsAware, ExtendedProxy {
         _setImplementation(newImplementation);
     }
 
-    function setImplementor(address newOImplementor) external {
+    function setImplementor(address newImplementor) external {
         require(msg.sender == implementor);
-        require(newOImplementor != address(0), "invalid new implementor");
-        implementor = newOImplementor;
+        require(newImplementor != address(0), "invalid new implementor");
+        implementor = newImplementor;
     }
 }
