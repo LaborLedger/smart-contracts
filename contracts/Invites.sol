@@ -1,4 +1,4 @@
-pragma solidity 0.5.11;
+pragma solidity 0.5.13;
 
 contract Invites {
     mapping(bytes32 => uint256) private _invitations;

@@ -1,4 +1,4 @@
-pragma solidity 0.5.11;
+pragma solidity 0.5.13;
 
 // TODO: add check/revert on max values here and in imported contracts
 // TODO: implement invitation logic

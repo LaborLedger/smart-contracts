@@ -5,6 +5,16 @@ with newly created 'truffle develop' network
 $ truffle exec manual-test.truffle-develop.js --network truffle --compile
 */
 
+/*
+let collaboration = await Collaboration.new()
+let implementation = await LaborLedgerImplementation.new()
+await implementation.init(initParams)
+
+let inst = await LaborLedgerCaller.new(implementation.address, collaboration.address, 0)
+(await inst.getPastEvents({fromBlock:0, toBlock:1000})).map(e=>`${JSON.stringify(e,null,2)}`)
+*/
+
+
 const {advanceBlock, advanceTimeAndBlock} = require('./scripts/truffle-test-helper')(web3);
 const unixTimeNow = Number.parseInt(`${Date.now() / 1000}`);
 const weekNow = Math.floor((unixTimeNow - 345600) / (7 * 24 * 3600)) + 1;
