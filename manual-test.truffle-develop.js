@@ -50,7 +50,7 @@ module.exports = async function(callback) {
     const hashedTerms = web3.utils.fromAscii(terms);
     const startWeek = 1;
     const managerEquity = 200000;
-    const investorEquity = 300000;
+    const investorEquity = 100000;
     const weights = [1,2,3,4];
 
     async function main() {
@@ -93,15 +93,15 @@ module.exports = async function(callback) {
             // acceptWeight,
             addProjectLead,
             getMemberData,
-            getMemberEquity,
+            getMemberShare,
             getMemberStatus,
             join,
             init,
             setMemberStatus,
             setMemberWeight,
-            submitHours,
-            submittedHours,
-            submittedWeightedHours
+            submitTime,
+            totalTime,
+            totalWeightedTime
         } = instance.methods;
 
         const {
@@ -150,8 +150,8 @@ module.exports = async function(callback) {
 
         advanceTimeAndBlock(7 * 24 * 3600);
 
-        console.log('>>>> submit hours member3');
-        receipt = await submitHours(weekNow, [0, 0, 0, 5, 5, 0, 0]).send({from: memberAddress3, gas:300000});
+        console.log('>>>> submitTime member3');
+        receipt = await submitTime(weekNow, [0, 0, 0, 5, 5, 0, 0]).send({from: memberAddress3, gas:300000});
         console.log(`>> receipt = ${JSON.stringify(receipt, null, 2)}`);
 
         console.log('>>>> set member3 status hold');
@@ -174,14 +174,14 @@ module.exports = async function(callback) {
         receipt = await setMemberWeight(memberAddress2, 2).send({from: projectLeadAddress});
         console.log(`>> receipt = ${JSON.stringify(receipt, null, 2)}`);
 
-        console.log('>>>> submit hours member');
-        receipt = await submitHours(weekNow, [4, 4, 4, 4, 3, 1, 0]).send({from: memberAddress, gas:300000});
+        console.log('>>>> submitTime member');
+        receipt = await submitTime(weekNow, [4, 4, 4, 4, 3, 1, 0]).send({from: memberAddress, gas:300000});
         console.log(`>> receipt = ${JSON.stringify(receipt, null, 2)}`);
 
         advanceTimeAndBlock(7 * 24 * 3600);
 
-        console.log('>>>> submit hours member');
-        receipt = await submitHours(weekNow + 1, [34, 44, 44, 44, 36, 12, 0]).send({from: memberAddress, gas:300000});
+        console.log('>>>> submitTime member');
+        receipt = await submitTime(weekNow + 1, [34, 44, 44, 44, 36, 12, 0]).send({from: memberAddress, gas:300000});
         console.log(`>> receipt = ${JSON.stringify(receipt, null, 2)}`);
 
         // console.log('>>>> accept weight by member');
@@ -192,12 +192,12 @@ module.exports = async function(callback) {
         // receipt = await acceptWeight(64).send({from: memberAddress2, gas:300000});
         // console.log(`>> receipt = ${JSON.stringify(receipt, null, 2)}`);
 
-        console.log('>>>> submit hours member 2');
-        receipt = await submitHours(weekNow + 1, [80, 80, 80, 80, 60, 0, 0]).send({from: memberAddress2, gas:300000});
+        console.log('>>>> submitTime member2');
+        receipt = await submitTime(weekNow + 1, [80, 80, 80, 80, 60, 0, 0]).send({from: memberAddress2, gas:300000});
         console.log(`>> receipt = ${JSON.stringify(receipt, null, 2)}`);
 
-        console.log('>>>> submit hours member3 being onhold');
-        receipt = await submitHours(weekNow + 1, [0, 0, 0, 5, 5, 0, 0]).send({from: memberAddress3, gas:300000}).then(fall).catch(logErr);
+        console.log('>>>> submitTime member3 being onhold');
+        receipt = await submitTime(weekNow + 1, [0, 0, 0, 5, 5, 0, 0]).send({from: memberAddress3, gas:300000}).then(fall).catch(logErr);
 
         let memberData = await getMemberData(memberAddress).call();
         console.log(`>> member  Data = ${JSON.stringify(memberData, null, 2)}`);
@@ -208,20 +208,20 @@ module.exports = async function(callback) {
         memberData = await getMemberData(memberAddress3).call();
         console.log(`>> member3 Data = ${JSON.stringify(memberData, null, 2)}`);
 
-        let memberShare = await getMemberEquity(memberAddress).call();
+        let memberShare = await getMemberShare(memberAddress).call();
         console.log(`>> member  Share = ${memberShare.toString()}`);
 
-        memberShare = await getMemberEquity(memberAddress2).call();
+        memberShare = await getMemberShare(memberAddress2).call();
         console.log(`>> member2 Share = ${memberShare.toString()}`);
 
-        memberShare = await getMemberEquity(memberAddress3).call();
+        memberShare = await getMemberShare(memberAddress3).call();
         console.log(`>> member3 Share = ${memberShare.toString()}`);
 
-        let value = await submittedHours().call();
-        console.log(`>> submittedHours = ${value.toString()}`);
+        let value = await totalTime().call();
+        console.log(`>> totalTime = ${value.toString()}`);
 
-        value = await submittedWeightedHours().call();
-        console.log(`>> submittedWeightedHours = ${value.toString()}`);
+        value = await totalWeightedTime().call();
+        console.log(`>> totalWeightedTime = ${value.toString()}`);
 
         console.log('>>> done');
     }

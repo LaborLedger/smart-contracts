@@ -48,9 +48,10 @@ CollaborationAware          // @dev storage slot 2
 
     struct Member {
         Status status;
-        Weight weight;                  // as a fraction of STANDARD weight
-        uint32 submittedHours;          // in Time Units
-        uint16[4] lastSubmittedWeeks;   // Week Indexes of 4 earliest weeks
+        uint8 weight;               // as a fraction of STANDARD weight
+        uint32 time;                // in Time Units
+        uint32 weightedTime;        // in Time Units
+        uint16[4] earliestWeeks;    // 4 earliest weeks submitted
     }
 
     // @dev storage slot 3
@@ -59,28 +60,29 @@ CollaborationAware          // @dev storage slot 2
 
     // @dev storage slot 4
 
+    // block the contract is created within
+    uint32 public birthBlock;
+
     // Equity pool measured in Share Units
-    // weighted-hour-based pool
+    // labor-units-based pool
     uint32 public laborEquity;
     // management pool
     uint32 public managerEquity;
     // investors pool
     uint32 public investorEquity;
 
-    // block the contract is created within
-    uint32 public birthBlock;
 
     // first week of the project, Week Index
     uint16 public startWeek;
 
     // maximum hours in Time Units allowed for submission by a member per a week
-    uint16 public maxHoursPerWeek;
+    uint16 public maxTimeWeekly;
 
     // total submitted hours in Time Units
-    uint32 public submittedHours;
+    uint32 public totalTime;
 
     // submitted hours in Time Units weighted with User Weights
-    uint32 public submittedWeightedHours;
+    uint32 public totalWeightedTime;
 
     // @dev storage slot 5
     // Working hours weights for _, STANDARD, SENIOR, ADVISER as a fraction of STANDARD
@@ -89,22 +91,22 @@ CollaborationAware          // @dev storage slot 2
     // @dev storage slot 6, ...
     mapping(address => Member) private _members;
 
-    event MemberAdded(address indexed member);
+    event MemberJoined(address indexed member);
 
     event MemberStatusModified(address indexed member, Status status);
 
     // hours in Time Units
-    event HoursSubmitted(
+    event TimeSubmitted(
         address indexed member,
         uint16 indexed week,
-        uint16 weightedHours,
-        uint16[7] dailyHours
+        uint32 weightedTime,
+        uint16[7] dailyTime
     );
 
-    event MemberWeightAdded(
+    event MemberWeightAssigned(
         address indexed user,
-        Weight indexed weight,
-        uint32 weightedHours
+        Weight weightIndex,
+        uint32 weightedTime
     );
 
     // in Share Units
@@ -113,7 +115,6 @@ CollaborationAware          // @dev storage slot 2
         uint32 newManagerEquity,
         uint32 newInvestorEquity
     );
-
 
     modifier senderIsNotMember(){
         require(
@@ -193,7 +194,7 @@ CollaborationAware          // @dev storage slot 2
         if (_weights[uint8(Weight.STANDARD)] != 0) {
             memberWeights = _weights;
         } else {
-            // default (as a fraction of STANDARD: 0, 2/2, 3/2, 4/2)
+            // default
             memberWeights = [
                 0,  // ignored
                 2,  // STANDARD
@@ -201,7 +202,7 @@ CollaborationAware          // @dev storage slot 2
                 4   // ADVISER
             ];
         }
-        maxHoursPerWeek = 55 hours / 5 minutes;
+        maxTimeWeekly = 55 hours / 5 minutes;
         birthBlock = uint32(block.number);
     }
 
@@ -251,40 +252,42 @@ CollaborationAware          // @dev storage slot 2
     }
 
     /**
-    * @dev Allows project lead to setup a new limit on maximum weekly hours
-    * @param _maxHoursPerWeek uint16 maximum weekly hours in Time Units
+    * @dev Allows project lead to setup a new limit on maximum weekly labor time
+    * @param _maxTimePerWeek uint16 maximum weekly labor time in Time Units
     */
-    function setMaxHoursPerWeek(uint16 _maxHoursPerWeek)
+    function setMaxTimePerWeek(uint16 _maxTimePerWeek)
         external
         onlyProjectLead
     {
-        require(_maxHoursPerWeek != 0, "invalid maxHoursPerWeek");
-        require(_maxHoursPerWeek <= 2016, "too big maxHoursPerWeek");
-        maxHoursPerWeek = maxHoursPerWeek;
+        require(_maxTimePerWeek != 0, "invalid maxTimePerWeek");
+        require(_maxTimePerWeek <= 2016, "too big maxTimePerWeek");
+        maxTimeWeekly = _maxTimePerWeek;
     }
 
     /**
     * @dev Set user weight. Can only be done once. Only project lead can call
     * @param user User whose weight has to be set
-    * @param weight Weight of the user (the index in memberWeights)
+    * @param weightIndex Weight of the user (the index in memberWeights)
     */
     function setMemberWeight(
         address user,
-        Weight weight
+        Weight weightIndex
     )
         external
         onlyProjectLead
         memberExists(user)
     {
-        require(_members[user].weight == Weight._, "weight already set");
-        require(weight != Weight._, "invalid weight");
+        require(_members[user].weight == 0, "weight already set");
+        require(weightIndex != Weight._, "invalid weightIndex");
 
-        _members[user].weight = weight;
+        uint8 _weight = memberWeights[uint8(weightIndex)];
+        _members[user].weight = _weight;
 
-        uint32 weightedHours = _members[user].submittedHours * memberWeights[uint8(weight)] / memberWeights[uint8(Weight.STANDARD)];
-        submittedWeightedHours += weightedHours;
+        uint32 weighted = _members[msg.sender].time * _weight;
+        _members[msg.sender].weightedTime += weighted;
+        totalWeightedTime += weighted;
 
-        emit MemberWeightAdded(user, weight, weightedHours);
+        emit MemberWeightAssigned(user, weightIndex, weighted);
     }
 
     /**
@@ -295,7 +298,7 @@ CollaborationAware          // @dev storage slot 2
         external
         view
         memberExists(user)
-    returns(Weight)
+    returns(uint8)
     {
         return _members[user].weight;
     }
@@ -310,7 +313,7 @@ CollaborationAware          // @dev storage slot 2
     {
         require(terms == sha256(abi.encodePacked(_terms)), "terms mismatch");
         _members[msg.sender].status = Status.ACTIVE;
-        emit MemberAdded(msg.sender);
+        emit MemberJoined(msg.sender);
     }
 
     function setMemberStatus(
@@ -335,7 +338,7 @@ CollaborationAware          // @dev storage slot 2
     * @param week Week as uint16
     * @param dayHours Time worked each day in a week in Time Units
     */
-    function submitHours(
+    function submitTime(
         uint16 week,
         uint16[7] calldata dayHours
     )
@@ -359,31 +362,36 @@ CollaborationAware          // @dev storage slot 2
         uint8 indexOfLatestWeek;
         for (uint8 i; i < 4 && latestWeekFound != 0; i++) {
             require(
-                week != _members[msg.sender].lastSubmittedWeeks[i],
+                week != _members[msg.sender].earliestWeeks[i],
                 "duplicated submission"
             );
-            if (_members[msg.sender].lastSubmittedWeeks[i] < latestWeekFound) {
-                (latestWeekFound, indexOfLatestWeek) = (_members[msg.sender].lastSubmittedWeeks[i], i);
+            if (_members[msg.sender].earliestWeeks[i] < latestWeekFound) {
+                (latestWeekFound, indexOfLatestWeek) = (_members[msg.sender].earliestWeeks[i], i);
             }
         }
         // Update list of latest weeks
-        _members[msg.sender].lastSubmittedWeeks[indexOfLatestWeek] = week;
+        _members[msg.sender].earliestWeeks[indexOfLatestWeek] = week;
 
-        uint16 weekHours;
+        uint32 submitted;
         for (uint8 i; i < dayHours.length; i++) {
-            weekHours += dayHours[i];
+            submitted += dayHours[i];
         }
-        require(weekHours <= maxHoursPerWeek, "hours exceed limit");
+        require(submitted <= maxTimeWeekly, "time exceed limit");
 
-        _members[msg.sender].submittedHours += weekHours;
-        uint16 weightedHours = weekHours * memberWeights[uint8(_members[msg.sender].weight)] / memberWeights[uint8(Weight.STANDARD)];
-        submittedHours += weekHours;
-        submittedWeightedHours += weightedHours;
+        _members[msg.sender].time += submitted;
+        totalTime += submitted;
 
-        emit HoursSubmitted(
+        uint32 weighted;
+        if (_members[msg.sender].weight != 0) {
+            weighted = submitted * _members[msg.sender].weight;
+            _members[msg.sender].weightedTime += weighted;
+            totalWeightedTime += weighted;
+        }
+
+        emit TimeSubmitted(
             msg.sender,
             week,
-            weightedHours,
+            weighted,
             dayHours
         );
     }
@@ -393,12 +401,12 @@ CollaborationAware          // @dev storage slot 2
     * @param member Address of the member
     * @return uint32 hours in Time Units
     */
-    function getSubmittedHours(address member)
+    function getMemberTime(address member)
         external
         view
         returns(uint32)
     {
-        return _members[member].submittedHours;
+        return _members[member].time;
     }
 
     /**
@@ -406,36 +414,38 @@ CollaborationAware          // @dev storage slot 2
     * @param member Address of the member
     * @return uint32 equity in ShareUnits
     */
-    function getMemberEquity(address member)
+    function getMemberShare(address member)
         external
         view
         returns(uint64)
     {
-        require(submittedWeightedHours != 0, "no hours submitted yet");
-        uint32 memberWeightedHours = _members[member].submittedHours * memberWeights[uint8(_members[member].weight)] / memberWeights[uint8(Weight.STANDARD)];
-        return uint64(laborEquity) * memberWeightedHours / submittedWeightedHours;
+        require(totalWeightedTime != 0, "no hours submitted yet");
+        return uint64(laborEquity) * _members[member].weightedTime / totalWeightedTime;
     }
 
     /**
-    * @dev Returns status, weight and submittedHours for a member
+    * @dev Returns status, weight and time for a member
     * @param member Address of the member
     * @return status Status
-    * @return weight Weight
-    * @return timeUnits uint32 in Time Units
+    * @return _weight Weight
+    * @return _time uint32 in Time Units
+    * @return _weightedTime uint32 in Time Units
     */
     function getMemberData(address member)
         external
         view
         returns (
             Status status,
-            Weight weight,
-            uint32 timeUnits
+            uint8 weight,
+            uint32 time,
+            uint32 weightedTime
     )
     {
         return (
             _members[member].status,
             _members[member].weight,
-            _members[member].submittedHours
+            _members[member].time,
+            _members[member].weightedTime
         );
     }
 
@@ -464,4 +474,4 @@ CollaborationAware          // @dev storage slot 2
 
 // TODO: optimize function params to cut gas spent on bitwise operations
 // TODO: minimize sload sstore operations
-// TODO: optimize 'function submitHours' (cycles, read to memory from storage once, ...)
+// TODO: optimize 'function submitTime' (cycles, read to memory from storage once, ...)
