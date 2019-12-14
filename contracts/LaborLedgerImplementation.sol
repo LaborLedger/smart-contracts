@@ -38,6 +38,7 @@ CollaborationAware          // @dev storage slot 2
         ACTIVE,     // 1
         ONHOLD      // 2
     }
+
     // Indexes for memberWeights array
     enum Weight {
         _,          // 0
@@ -49,6 +50,7 @@ CollaborationAware          // @dev storage slot 2
     struct Member {
         Status status;
         uint8 weight;               // as a fraction of STANDARD weight
+        uint16 maxTimeWeekly;       // max time allowed to submit per a week
         uint32 time;                // in Time Units
         uint32 weightedTime;        // in Time Units
         uint16[4] earliestWeeks;    // 4 earliest weeks submitted
@@ -71,12 +73,8 @@ CollaborationAware          // @dev storage slot 2
     // investors pool
     uint32 public investorEquity;
 
-
     // first week of the project, Week Index
     uint16 public startWeek;
-
-    // maximum hours in Time Units allowed for submission by a member per a week
-    uint16 public maxTimeWeekly;
 
     // total submitted hours in Time Units
     uint32 public totalTime;
@@ -85,7 +83,7 @@ CollaborationAware          // @dev storage slot 2
     uint32 public totalWeightedTime;
 
     // @dev storage slot 5
-    // Working hours weights for _, STANDARD, SENIOR, ADVISER as a fraction of STANDARD
+    // Labor time weights for _, STANDARD, SENIOR, ADVISER
     uint8[4] public memberWeights;
 
     // @dev storage slot 6, ...
@@ -104,9 +102,14 @@ CollaborationAware          // @dev storage slot 2
     );
 
     event MemberWeightAssigned(
-        address indexed user,
+        address indexed member,
         Weight weightIndex,
         uint32 weightedTime
+    );
+
+    event MemberTimePerWeekUpdated(
+        address indexed member,
+        uint16 maxTimeWeekly
     );
 
     // in Share Units
@@ -202,7 +205,6 @@ CollaborationAware          // @dev storage slot 2
                 4   // ADVISER
             ];
         }
-        maxTimeWeekly = 55 hours / 5 minutes;
         birthBlock = uint32(block.number);
     }
 
@@ -232,7 +234,7 @@ CollaborationAware          // @dev storage slot 2
     }
 
     /**
-    * @dev Allows owner of the contract to setup a new equity
+    * @dev Allows quorum to setup a new equity
     * It may not be greater than previous set equity
     * @param _laborEquity New labor equity pool in Share Units
     * @param _managerEquity New manager equity pool in Share Units
@@ -242,7 +244,7 @@ CollaborationAware          // @dev storage slot 2
         uint32 _laborEquity,
         uint32 _managerEquity,
         uint32 _investorEquity
-    ) external onlyProjectLead
+    ) external onlyProjectQuorum
     {
         require(
             _managerEquity <= managerEquity,
@@ -253,15 +255,17 @@ CollaborationAware          // @dev storage slot 2
 
     /**
     * @dev Allows project lead to setup a new limit on maximum weekly labor time
-    * @param _maxTimePerWeek uint16 maximum weekly labor time in Time Units
+    * @param maxTime uint16 maximum weekly labor time in Time Units
     */
-    function setMaxTimePerWeek(uint16 _maxTimePerWeek)
+    function setMemberTimePerWeek(address member, uint16 maxTime)
         external
+        memberExists(member)
         onlyProjectLead
     {
-        require(_maxTimePerWeek != 0, "invalid maxTimePerWeek");
-        require(_maxTimePerWeek <= 2016, "too big maxTimePerWeek");
-        maxTimeWeekly = _maxTimePerWeek;
+        require(maxTime != 0, "invalid maxTimePerWeek");
+        require(maxTime <= MAX_MAX_TIME_WEEKLY, "too big maxTime");
+        _members[member].maxTimeWeekly = maxTime;
+        emit MemberTimePerWeekUpdated(member, maxTime);
     }
 
     /**
@@ -313,6 +317,7 @@ CollaborationAware          // @dev storage slot 2
     {
         require(terms == sha256(abi.encodePacked(_terms)), "terms mismatch");
         _members[msg.sender].status = Status.ACTIVE;
+        _members[msg.sender].maxTimeWeekly = DEF_MAX_TIME_WEEKLY;
         emit MemberJoined(msg.sender);
     }
 
@@ -376,7 +381,10 @@ CollaborationAware          // @dev storage slot 2
         for (uint8 i; i < dayHours.length; i++) {
             submitted += dayHours[i];
         }
-        require(submitted <= maxTimeWeekly, "time exceed limit");
+        require(
+            submitted <= _members[msg.sender].maxTimeWeekly,
+            "time exceed limit"
+        );
 
         _members[msg.sender].time += submitted;
         totalTime += submitted;
