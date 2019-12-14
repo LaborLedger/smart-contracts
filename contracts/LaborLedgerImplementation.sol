@@ -4,12 +4,12 @@ import "./lib/CollaborationAware.sol";
 import "./lib/Constants.sol";
 import "./lib/DelegatecallInitAware.sol";
 import "./lib/Erc165Compatible.sol";
-// import "./lib/ProxyCallerAware.sol";
+import "./lib/ProxyCallerAware.sol";
 import "./lib/RolesAware.sol";
 import "./lib/UnpackedInitParamsAware.sol";
 
 contract LaborLedgerImplementation is
-// ProxyCallerAware,
+ProxyCallerAware,
 Constants,
 Erc165Compatible,
 UnpackedInitParamsAware,
@@ -48,10 +48,9 @@ CollaborationAware          // @dev storage slot 2
 
     struct Member {
         Status status;
-        Weight weight;
-        uint32 submittedHours;
-        // Week Indexes of four latest submitted weeks
-        uint16[4] lastSubmittedWeeks;
+        Weight weight;                  // as a fraction of STANDARD weight
+        uint32 submittedHours;          // in Time Units
+        uint16[4] lastSubmittedWeeks;   // Week Indexes of 4 earliest weeks
     }
 
     // @dev storage slot 3
@@ -132,6 +131,10 @@ CollaborationAware          // @dev storage slot 2
         _;
     }
 
+    function () external payable {
+        revert('ethers unaccepted');
+    }
+
     /**
     * @dev "constructor" that will be delegatecall`ed on deployment of a LaborLedgerCaller
     * @param initParams <bytes> packed params for _init
@@ -163,7 +166,7 @@ CollaborationAware          // @dev storage slot 2
             uint16 _startWeek,
             uint32 _managerEquity,
             uint32 _investorEquity,
-            uint8[4] memory _memberWeights
+            uint8[4] memory _weights
         ) = unpackInitParams(initParams);
 
         initCollaboration(_collaboration);
@@ -187,8 +190,8 @@ CollaborationAware          // @dev storage slot 2
             _setEquity(100000, 900000, 0);
         }
 
-        if (_memberWeights[uint8(Weight.STANDARD)] != 0) {
-            memberWeights = _memberWeights;
+        if (_weights[uint8(Weight.STANDARD)] != 0) {
+            memberWeights = _weights;
         } else {
             // default (as a fraction of STANDARD: 0, 2/2, 3/2, 4/2)
             memberWeights = [
@@ -240,6 +243,10 @@ CollaborationAware          // @dev storage slot 2
         uint32 _investorEquity
     ) external onlyProjectLead
     {
+        require(
+            _managerEquity <= managerEquity,
+            "management equity can't increase"
+        );
         _setEquity(_laborEquity, _managerEquity, _investorEquity);
     }
 
@@ -259,7 +266,7 @@ CollaborationAware          // @dev storage slot 2
     /**
     * @dev Set user weight. Can only be done once. Only project lead can call
     * @param user User whose weight has to be set
-    * @param weight Weight of the user
+    * @param weight Weight of the user (the index in memberWeights)
     */
     function setMemberWeight(
         address user,
@@ -270,6 +277,8 @@ CollaborationAware          // @dev storage slot 2
         memberExists(user)
     {
         require(_members[user].weight == Weight._, "weight already set");
+        require(weight != Weight._, "invalid weight");
+
         _members[user].weight = weight;
 
         uint32 weightedHours = _members[user].submittedHours * memberWeights[uint8(weight)] / memberWeights[uint8(Weight.STANDARD)];
@@ -282,7 +291,7 @@ CollaborationAware          // @dev storage slot 2
     * @dev Returns user weight
     * @param user User whose weight needs to be returned
     */
-    function getUserWeight(address user)
+    function getMemberWeight(address user)
         external
         view
         memberExists(user)
@@ -412,7 +421,7 @@ CollaborationAware          // @dev storage slot 2
     * @param member Address of the member
     * @return status Status
     * @return weight Weight
-    * @return submittedHours uint32 in Time Units
+    * @return timeUnits uint32 in Time Units
     */
     function getMemberData(address member)
         external
@@ -420,7 +429,7 @@ CollaborationAware          // @dev storage slot 2
         returns (
             Status status,
             Weight weight,
-            uint32 submittedHours
+            uint32 timeUnits
     )
     {
         return (
@@ -443,11 +452,6 @@ CollaborationAware          // @dev storage slot 2
         uint32 _managerEquity,
         uint32 _investorEquity
     ) internal {
-        require(
-            _managerEquity <= managerEquity,
-            "management equity can't increase"
-        );
-
         uint totalEquity = _laborEquity + _managerEquity + _investorEquity;
         require(totalEquity == 1000000, "equity must sum to 1000000 (100%)");
 
