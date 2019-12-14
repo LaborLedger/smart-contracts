@@ -134,16 +134,16 @@ CollaborationAware          // @dev storage slot 2
 
     /**
     * @dev "constructor" that will be delegatecall`ed on deployment of a LaborLedgerCaller
-    * @param initParams <bytes> packed params for _init
+    * @param initParams <uint256> packed params for _init
     */
-    function init(bytes calldata initParams) external returns(bytes4) {
+    function init(uint256 initParams) external returns(bytes4) {
         require(birthBlock == uint32(0), "contract already initialized");
         _init(initParams);
         return INIT_INTERFACE_ID;
     }
 
     /**
-    * @param initParams <bytes> packed init params
+    * @param initParams <uint256> packed init params
     * @dev params packed into `bytes` (96 bytes):
     *   _collaboration <address> Collaboration contract
     *   _terms <bytes32> project terms of collaboration (default: 0)
@@ -156,14 +156,14 @@ CollaborationAware          // @dev storage slot 2
     *   _collaboration is the only mandatory param
     *   ... provide zero value(s) for any other param(s) to set default value(s)
     */
-    function _init(bytes memory initParams) internal {
+    function _init(uint256 initParams) internal {
         (
             address _collaboration,
             bytes32 _terms,
             uint16 _startWeek,
             uint32 _managerEquity,
             uint32 _investorEquity,
-            uint8[4] memory _memberWeights
+            uint8[4] memory _weights
         ) = unpackInitParams(initParams);
 
         initCollaboration(_collaboration);
@@ -187,8 +187,8 @@ CollaborationAware          // @dev storage slot 2
             _setEquity(100000, 900000, 0);
         }
 
-        if (_memberWeights[uint8(Weight.STANDARD)] != 0) {
-            memberWeights = _memberWeights;
+        if (_weights[uint8(Weight.STANDARD)] != 0) {
+            memberWeights = _weights;
         } else {
             // default (as a fraction of STANDARD: 0, 2/2, 3/2, 4/2)
             memberWeights = [
@@ -240,6 +240,10 @@ CollaborationAware          // @dev storage slot 2
         uint32 _investorEquity
     ) external onlyProjectLead
     {
+        require(
+            _managerEquity <= managerEquity,
+            "management equity can't increase"
+        );
         _setEquity(_laborEquity, _managerEquity, _investorEquity);
     }
 
@@ -412,7 +416,7 @@ CollaborationAware          // @dev storage slot 2
     * @param member Address of the member
     * @return status Status
     * @return weight Weight
-    * @return submittedHours uint32 in Time Units
+    * @return timeUnits uint32 in Time Units
     */
     function getMemberData(address member)
         external
@@ -420,7 +424,7 @@ CollaborationAware          // @dev storage slot 2
         returns (
             Status status,
             Weight weight,
-            uint32 submittedHours
+            uint32 timeUnits
     )
     {
         return (
@@ -443,11 +447,6 @@ CollaborationAware          // @dev storage slot 2
         uint32 _managerEquity,
         uint32 _investorEquity
     ) internal {
-        require(
-            _managerEquity <= managerEquity,
-            "management equity can't increase"
-        );
-
         uint totalEquity = _laborEquity + _managerEquity + _investorEquity;
         require(totalEquity == 1000000, "equity must sum to 1000000 (100%)");
 

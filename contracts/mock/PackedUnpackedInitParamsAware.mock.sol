@@ -12,11 +12,11 @@ contract MockPackUnpack is PackedInitParamsAware, UnpackedInitParamsAware {
         uint32 _managerEquity,
         uint32 _investorEquity,
         uint8[4] memory _weights
-    ) public pure returns (bytes memory) {
+    ) public pure returns (uint256) {
         return packInitParams(_collaboration, _terms, _startWeek, _managerEquity, _investorEquity, _weights);
     }
 
-    function unpack(bytes memory initParams) public pure returns (
+    function unpack(uint256 initParams) public pure returns (
     address _collaboration,
     bytes32 _terms,
     uint16 _startWeek,

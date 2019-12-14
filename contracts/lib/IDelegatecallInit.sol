@@ -5,5 +5,5 @@ interface IDelegatecallInit {
     * @param {uint256} initParams packed arbitrary params
     * @return {bytes4} ERC-165 Interface ID
     */
-    function init(bytes calldata initParams) external returns (bytes4);
+    function init(uint256 initParams) external returns (bytes4);
 }

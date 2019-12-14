@@ -35,7 +35,7 @@ contract LaborLedgerCaller is PackedInitParamsAware, ExtendedProxy {
         implementor = msg.sender;
         _setImplementation(implementation);
 
-        bytes memory initParams = packInitParams(
+        uint256 initParams = packInitParams(
             _collaboration,
             _terms,
             _startWeek,

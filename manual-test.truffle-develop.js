@@ -13,6 +13,10 @@ let initParams = await packUnpack.pack(collaboration.address, web3.utils.fromAsc
 await implementation.init(initParams)
 
 let inst = await LaborLedgerCaller.new(implementation.address, collaboration.address, web3.utils.fromAscii('the rest we test'), 2558, 400000, 300000, [1,2,3,4])
+(await inst.getPastEvents({fromBlock:0, toBlock:1000})).map(e=>`${JSON.stringify(e,null,2)}`)
+
+let co = new web3.eth.Contract(implementation.abi, inst.address)
+(await co.getPastEvents({fromBlock:0, toBlock:1000})).map(e=>`${JSON.stringify(e,null,2)}`)
 
 */
 
@@ -71,7 +75,16 @@ module.exports = async function(callback) {
         receipt = await web3.eth.getTransactionReceipt(caller.transactionHash);
         console.log(`>> receipt = ${JSON.stringify(receipt, null, 2)}`);
 
+        console.log('>>>> LaborLedgerCaller.new (2)');
+        const caller2 = await LaborLedgerCaller.new(implementation.address, collaboration.address, startWeek);
+        receipt = await web3.eth.getTransactionReceipt(caller.transactionHash);
+        console.log(`>> receipt = ${JSON.stringify(receipt, null, 2)}`);
+
         const instance = new web3.eth.Contract(LaborLedgerImplementation.abi, caller.address);
+        console.log(`>> instance  = ${instance.options.address}`);
+
+        const instance2 = new web3.eth.Contract(LaborLedgerImplementation.abi, caller2.address);
+        console.log(`>> instance2 = ${instance2.options.address}`);
 
         const {
             acceptWeight,
@@ -86,6 +99,11 @@ module.exports = async function(callback) {
             submitTime,
         } = instance.methods;
 
+        const {
+            init: init2,
+            addProjectLead: addProjectLead2,
+        } = instance2.methods;
+
         // console.log('>>>> init');
         // receipt = await init(nobody, startWeek).send({from: defaultAccount, gas: 300000});
         // console.log(`>> receipt = ${JSON.stringify(receipt, null, 2)}`);
@@ -95,12 +113,21 @@ module.exports = async function(callback) {
         if (initParams.length !== 66) throw new Error('invalid initParams');
         await init(initParams).send({from: defaultAccount}).catch(e => console.log(e.reason));
 
+        console.log('>>>> init2');
+        const initParams2 = collaboration.address + web3.utils.padLeft((startWeek+1).toString(16), 24).replace('0x', '');
+        if (initParams2.length !== 66) throw new Error('invalid initParams');
+        await init2(initParams2).send({from: defaultAccount}).catch(e => console.log(e.reason));
+
         console.log('>>>> addProjectLead');
         receipt = await addProjectLead(projectLeadAddress).send({from: defaultAccount});
         console.log(`>> receipt = ${JSON.stringify(receipt, null, 2)}`);
 
         console.log('>>>> addProjectLead second time');
         await addProjectLead(projectLeadAddress).send({from: defaultAccount}).catch(e => console.log(e.reason));
+
+        console.log('>>>> addProjectLead(2)');
+        receipt = await addProjectLead2(userAddress3).send({from: defaultAccount});
+        console.log(`>> receipt = ${JSON.stringify(receipt, null, 2)}`);
 
         console.log('>>>> join member');
         receipt = await join(web3.utils.fromAscii('invite1'), 0, 0, 0).send({from: memberAddress});
