@@ -13,12 +13,11 @@ contract LaborLedgerCaller is PackedInitParamsAware, ExtendedProxy {
     /**
      * @param implementation <address> instance of LaborLedgerImplementation contract
      * @param _collaboration <address> instance of Collaboration contract
-     * @param _terms <bytes32> project terms of collaboration (default: 0)
+     * @param _terms <bytes32> project terms of collaboration
      * @param _startWeek <uint16> project first week as Week Index (default - previous week)
-     * @param _managerEquity <uint32> manager equity pool in Share Units (default 9000000)
-     * @param _investorEquity <uint32> investor equity pool in Share Units (default 0)
-     * @param _weights <uint[4]> weights, as a fraction of the STANDARD weight
-     *     default: [0, 2, 3, 4] for _ (ignored), STANDARD, SENIOR, ADVISER
+     * @param _managerEquity <uint32> manager equity pool in Share Units
+     * @param _investorEquity <uint32> investor equity pool in Share Units
+     * @param _weights <uint8[4]> weights for _ (ignored), STANDARD, SENIOR, ADVISER
      *
      *  @dev _collaboration is the only mandatory param
      *       ... provide zero value(s) for any other param(s) to set default value(s)
@@ -41,7 +40,7 @@ contract LaborLedgerCaller is PackedInitParamsAware, ExtendedProxy {
             _startWeek,
             _managerEquity,
             _investorEquity,
-            _weights
+            packWeights(_weights)
         );
 
         delegatecallInit(initParams);

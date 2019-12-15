@@ -16,7 +16,7 @@ contract UnpackedInitParamsAware is bytesUtilities {
         uint16 _startWeek,
         uint32 _managerEquity,
         uint32 _investorEquity,
-        uint8[4] memory _weights
+        uint32 _weights
     ) {
         _collaboration = address(_unpackUint256FromBytes(initParams, 2));
         _terms = bytes32(_unpackUint256FromBytes(initParams, 1));
@@ -26,12 +26,15 @@ contract UnpackedInitParamsAware is bytesUtilities {
         _managerEquity = uint32((rest >> 64) & 0xFFFFFFFF);
         _investorEquity = uint32((rest >> 32) & 0xFFFFFFFF);
 
-        _weights = [0, 0, 0, 0];
-        if (rest & 0xFFFFFFFF != 0) {
-            _weights[3] = uint8((rest >> 24) & 0xFF);
-            _weights[2] = uint8((rest >> 16) & 0xFF);
-            _weights[1] = uint8((rest >> 8) & 0xFF);
-            _weights[0] = uint8(rest & 0xFF);
-        }
+        _weights = uint32(rest & 0xFFFFFFFF);
+    }
+
+    function unpackWeights(uint32 weightsPacked) internal pure
+        returns(uint8[4] memory weights)
+    {
+        weights[3] = uint8((weightsPacked >> 24) & 0xFF);
+        weights[2] = uint8((weightsPacked >> 16) & 0xFF);
+        weights[1] = uint8((weightsPacked >> 8) & 0xFF);
+        weights[0] = uint8(weightsPacked & 0xFF);
     }
 }

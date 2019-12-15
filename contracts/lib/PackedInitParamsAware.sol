@@ -16,15 +16,21 @@ contract PackedInitParamsAware is bytesUtilities {
         uint16 _startWeek,
         uint32 _managerEquity,
         uint32 _investorEquity,
-        uint8[4] memory _weights
+        uint32 _packedWeights
     ) internal pure returns (bytes memory initParams) {
-        uint256 rest = (uint256(_weights[3]) << 24) | (uint256(_weights[2]) << 16) |  (uint256(_weights[1]) << 8) | uint256(_weights[0]);
-        rest = (uint256(_startWeek) << 96) | (uint256(_managerEquity) << 64) | (uint256(_investorEquity) << 32) | rest;
+        uint256 b = (uint256(_startWeek)<<96) | (uint256(_managerEquity)<<64);
+        b = b | (uint256(_investorEquity)<<32) | uint256(_packedWeights);
 
         initParams = _packThreeUint256ToBytes(
-            rest,
+            b,
             uint256(_terms),
             uint256(_collaboration)
         );
+    }
+
+    function packWeights(uint8[4] memory _weights) internal pure
+        returns(uint32 packed)
+    {
+        packed = uint32(_weights[3])<<24 | uint32(_weights[2])<<16 | uint32(_weights[1])<<8 | uint32(_weights[0]);
     }
 }

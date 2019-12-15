@@ -39,7 +39,7 @@ CollaborationAware          // @dev storage slot 2
         ONHOLD      // 2
     }
 
-    // Indexes for memberWeights array
+    // Indexes for weights
     enum Weight {
         _,          // 0
         STANDARD,   // 1
@@ -82,11 +82,10 @@ CollaborationAware          // @dev storage slot 2
     // submitted hours in Time Units weighted with User Weights
     uint32 public totalWeightedTime;
 
-    // @dev storage slot 5
-    // Labor time weights for _, STANDARD, SENIOR, ADVISER
-    uint8[4] public memberWeights;
+    // Labor time weights for _, STANDARD, SENIOR, ADVISER (uin8[4] packed)
+    uint32 _memberWeights;
 
-    // @dev storage slot 6, ...
+    // @dev storage slot 5, ...
     mapping(address => Member) private _members;
 
     event MemberJoined(address indexed member);
@@ -155,10 +154,9 @@ CollaborationAware          // @dev storage slot 2
     *   _collaboration <address> Collaboration contract
     *   _terms <bytes32> project terms of collaboration (default: 0)
     *   _startWeek <uint16> project first week as Week Index (default - previous week)
-    *   _managerEquity <uint32> manager equity pool in Share Units (default 9000000)
-    *   _investorEquity <uint32> investor equity pool in Share Units (default 0)
-    *   _memberWeights <uint[4]> weights, as a fraction of the STANDARD weight
-    *     default: [0, 2, 3, 4] for _ (ignored), STANDARD, SENIOR, ADVISER
+    *   _managerEquity <uint32> manager equity pool in Share Units
+    *   _investorEquity <uint32> investor equity pool in Share Units
+    *   _memberWeights <uint32> weights (uint8[4] packed into uin32)
     *
     *   _collaboration is the only mandatory param
     *   ... provide zero value(s) for any other param(s) to set default value(s)
@@ -170,7 +168,7 @@ CollaborationAware          // @dev storage slot 2
             uint16 _startWeek,
             uint32 _managerEquity,
             uint32 _investorEquity,
-            uint8[4] memory _weights
+            uint32 _weights
         ) = unpackInitParams(initParams);
 
         initCollaboration(_collaboration);
@@ -180,30 +178,23 @@ CollaborationAware          // @dev storage slot 2
             terms = sha256(abi.encodePacked(_terms));
         }
         if (_startWeek != 0) {
-            require(_startWeek <= 3130, "startWeek can't start after 31-Dec-2030");
+            require(_startWeek <= LATEST_START_WEEK, "too big startWeek");
             startWeek = _startWeek;
         } else {
             startWeek = getCurrentWeek() - 1;
         }
 
         if (_managerEquity != 0 || _investorEquity != 0) {
-            uint32 _laborEquity = 1000000 - _managerEquity - _investorEquity;
+            uint32 _laborEquity = TOTAL_EQUITY - _managerEquity - _investorEquity;
             _setEquity(_laborEquity, _managerEquity, _investorEquity);
         } else {
-            // default laborEquity, managerEquity, investorEquity
-            _setEquity(100000, 900000, 0);
+            _setEquity(LABOR_EQUITY, MANAGER_EQUITY, INVESTOR_EQUITY);
         }
 
-        if (_weights[uint8(Weight.STANDARD)] != 0) {
-            memberWeights = _weights;
+        if (_weights != 0) {
+            _memberWeights = _weights;
         } else {
-            // default
-            memberWeights = [
-                0,  // ignored
-                2,  // STANDARD
-                3,  // SENIOR
-                4   // ADVISER
-            ];
+            _memberWeights = MEMBER_WEIGHTS;
         }
         birthBlock = uint32(block.number);
     }
@@ -214,6 +205,10 @@ CollaborationAware          // @dev storage slot 2
         uint32 investorEquityPool
     ) {
         return (laborEquity, managerEquity, investorEquity);
+    }
+
+    function getWeights() external view returns(uint8[4] memory weights) {
+        weights = unpackWeights(_memberWeights);
     }
 
     /**
@@ -271,7 +266,7 @@ CollaborationAware          // @dev storage slot 2
     /**
     * @dev Set user weight. Can only be done once. Only project lead can call
     * @param user User whose weight has to be set
-    * @param weightIndex Weight of the user (the index in memberWeights)
+    * @param weightIndex Weight of the user (the index in _memberWeights)
     */
     function setMemberWeight(
         address user,
@@ -284,7 +279,8 @@ CollaborationAware          // @dev storage slot 2
         require(_members[user].weight == 0, "weight already set");
         require(weightIndex != Weight._, "invalid weightIndex");
 
-        uint8 _weight = memberWeights[uint8(weightIndex)];
+        uint8[4] memory weights = unpackWeights(_memberWeights);
+        uint8 _weight = weights[uint8(weightIndex)];
         _members[user].weight = _weight;
 
         uint32 weighted = _members[msg.sender].time * _weight;
@@ -471,7 +467,7 @@ CollaborationAware          // @dev storage slot 2
         uint32 _investorEquity
     ) internal {
         uint totalEquity = _laborEquity + _managerEquity + _investorEquity;
-        require(totalEquity == 1000000, "equity must sum to 1000000 (100%)");
+        require(totalEquity == TOTAL_EQUITY, "must sum to 1000000 (100%)");
 
         laborEquity = _laborEquity;
         managerEquity = _managerEquity;
@@ -480,6 +476,7 @@ CollaborationAware          // @dev storage slot 2
     }
 }
 
+// TODO: check overflow for totalTime and totalWeightedTime
 // TODO: optimize function params to cut gas spent on bitwise operations
 // TODO: minimize sload sstore operations
 // TODO: optimize 'function submitTime' (cycles, read to memory from storage once, ...)
