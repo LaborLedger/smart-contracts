@@ -10,10 +10,10 @@ contract CollaborationAware is Constants {
 
     // @dev "constructor" function that shall be called on the "Proxy Caller" deployment
     function initCollaboration(address _collaboration) internal {
-        require(_collaboration != address(0), "Invalid collaboration contract address");
+        require(_collaboration != address(0), "Invalid Collaboration address");
 
         bytes4 result = ICollaboration(_collaboration).logLaborLedger(address(this));
-        require(result == LOGLABORLEDGER__INTERFACE_ID, "LogLaborLager interface unsupported");
+        require(result == LOGLABORLEDGER__INTERFACE_ID, "LogLaborLager unsupported");
 
         collaboration = _collaboration;
     }

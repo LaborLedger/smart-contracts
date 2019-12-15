@@ -16,7 +16,7 @@ contract Constants {
     uint32 LABOR_EQUITY = 100000;
     uint32 MANAGER_EQUITY = 900000;
     uint32 INVESTOR_EQUITY = 0;
-    uint32 TOTAL_EQUITY = 1000000;
+    uint32 HUNDRED_PERCENT = 1000000;
 
     // Selector for ERC-165
     bytes4 constant INIT_INTERFACE_ID = 0x4ddf47d4;             // i.e. `bytes4(keccak256("init(bytes)"))`

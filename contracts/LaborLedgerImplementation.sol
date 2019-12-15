@@ -49,11 +49,12 @@ CollaborationAware          // @dev storage slot 2
 
     struct Member {
         Status status;
-        uint8 weight;               // as a fraction of STANDARD weight
+        uint8 weight;               // factor (not index) for 'weightedTime'
         uint16 maxTimeWeekly;       // max time allowed to submit per a week
-        uint32 time;                // in Time Units
-        uint32 weightedTime;        // in Time Units
-        uint16[4] earliestWeeks;    // 4 earliest weeks submitted
+        uint32 time;                // submitted time
+        uint32 weightedTime;        // submitted time weighted with 'weight'
+        uint32 clearedWeightedTime; // reserved for upgrades
+        uint16[4] recentWeeks;      // Indexes of 4 most recent weeks submitted
     }
 
     // @dev storage slot 3
@@ -65,6 +66,21 @@ CollaborationAware          // @dev storage slot 2
     // block the contract is created within
     uint32 public birthBlock;
 
+    // first week of the project, Week Index
+    uint16 public startWeek;
+
+    // Labor time weights for _, STANDARD, SENIOR, ADVISER (uin8[4] packed)
+    uint32 _memberWeights;
+
+    // total submitted hours in Time Units
+    uint32 public totalTime;
+
+    // submitted hours in Time Units weighted with User Weights
+    uint32 public totalWeightedTime;
+
+    // reserved for upgrades
+    uint16 private _unused;
+
     // Equity pool measured in Share Units
     // labor-units-based pool
     uint32 public laborEquity;
@@ -73,24 +89,12 @@ CollaborationAware          // @dev storage slot 2
     // investors pool
     uint32 public investorEquity;
 
-    // first week of the project, Week Index
-    uint16 public startWeek;
-
-    // total submitted hours in Time Units
-    uint32 public totalTime;
-
-    // submitted hours in Time Units weighted with User Weights
-    uint32 public totalWeightedTime;
-
-    // Labor time weights for _, STANDARD, SENIOR, ADVISER (uin8[4] packed)
-    uint32 _memberWeights;
-
     // @dev storage slot 5, ...
     mapping(address => Member) private _members;
 
     event MemberJoined(address indexed member);
 
-    event MemberStatusModified(address indexed member, Status status);
+    event MemberStatusUpdated(address indexed member, Status status);
 
     // hours in Time Units
     event TimeSubmitted(
@@ -185,7 +189,7 @@ CollaborationAware          // @dev storage slot 2
         }
 
         if (_managerEquity != 0 || _investorEquity != 0) {
-            uint32 _laborEquity = TOTAL_EQUITY - _managerEquity - _investorEquity;
+            uint32 _laborEquity = HUNDRED_PERCENT - _managerEquity - _investorEquity;
             _setEquity(_laborEquity, _managerEquity, _investorEquity);
         } else {
             _setEquity(LABOR_EQUITY, MANAGER_EQUITY, INVESTOR_EQUITY);
@@ -327,7 +331,7 @@ CollaborationAware          // @dev storage slot 2
     {
         require(status != Status._, "invalid status");
         _members[member].status = status;
-        emit MemberStatusModified(member, status);
+        emit MemberStatusUpdated(member, status);
     }
 
     /**
@@ -363,15 +367,15 @@ CollaborationAware          // @dev storage slot 2
         uint8 indexOfLatestWeek;
         for (uint8 i; i < 4 && latestWeekFound != 0; i++) {
             require(
-                week != _members[msg.sender].earliestWeeks[i],
+                week != _members[msg.sender].recentWeeks[i],
                 "duplicated submission"
             );
-            if (_members[msg.sender].earliestWeeks[i] < latestWeekFound) {
-                (latestWeekFound, indexOfLatestWeek) = (_members[msg.sender].earliestWeeks[i], i);
+            if (_members[msg.sender].recentWeeks[i] < latestWeekFound) {
+                (latestWeekFound, indexOfLatestWeek) = (_members[msg.sender].recentWeeks[i], i);
             }
         }
         // Update list of latest weeks
-        _members[msg.sender].earliestWeeks[indexOfLatestWeek] = week;
+        _members[msg.sender].recentWeeks[indexOfLatestWeek] = week;
 
         uint32 submitted;
         for (uint8 i; i < dayHours.length; i++) {
@@ -430,10 +434,11 @@ CollaborationAware          // @dev storage slot 2
     /**
     * @dev Returns status, weight and time for a member
     * @param member Address of the member
-    * @return status Status
-    * @return _weight Weight
-    * @return _time uint32 in Time Units
-    * @return _weightedTime uint32 in Time Units
+    * @return status <Status>
+    * @return _weight <uint8>
+    * @return time <uint32> in Time Units
+    * @return weightedTime <uint32> in Time Units
+    * @return laborShare <uint32> share in Share Units of total weighted time
     */
     function getMemberData(address member)
         external
@@ -442,14 +447,20 @@ CollaborationAware          // @dev storage slot 2
             Status status,
             uint8 weight,
             uint32 time,
-            uint32 weightedTime
+            uint32 weightedTime,
+            uint32 laborShare
     )
     {
+        if (totalWeightedTime & _members[member].weightedTime != 0) {
+            uint256 shares = _members[member].weightedTime * HUNDRED_PERCENT;
+            laborShare = uint32(shares / totalWeightedTime);
+        }
         return (
             _members[member].status,
             _members[member].weight,
             _members[member].time,
-            _members[member].weightedTime
+            _members[member].weightedTime,
+            laborShare
         );
     }
 
@@ -467,7 +478,7 @@ CollaborationAware          // @dev storage slot 2
         uint32 _investorEquity
     ) internal {
         uint totalEquity = _laborEquity + _managerEquity + _investorEquity;
-        require(totalEquity == TOTAL_EQUITY, "must sum to 1000000 (100%)");
+        require(totalEquity == HUNDRED_PERCENT, "must sum to 1000000 (100%)");
 
         laborEquity = _laborEquity;
         managerEquity = _managerEquity;
