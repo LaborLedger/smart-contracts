@@ -58,8 +58,8 @@ CollaborationAware          // @dev storage slot 2
     }
 
     // @dev storage slot 3
-    // sha256 of the terms of collaboration (default: sha256(<32 zero bytes>) which is 0)
-    bytes32 public terms;
+    // reserved
+    bytes32 internal _reserved;
 
     // @dev storage slot 4
 
@@ -92,7 +92,7 @@ CollaborationAware          // @dev storage slot 2
     // @dev storage slot 5, ...
     mapping(address => Member) private _members;
 
-    event MemberJoined(address indexed member);
+    event MemberJoined(address indexed member, bytes32 invitation);
 
     event MemberStatusUpdated(address indexed member, Status status);
 
@@ -156,7 +156,7 @@ CollaborationAware          // @dev storage slot 2
     * @param initParams <bytes> packed init params
     * @dev params packed into `bytes` (96 bytes):
     *   _collaboration <address> Collaboration contract
-    *   _terms <bytes32> project terms of collaboration (default: 0)
+    *   _projectLead <address> (optional) address of project lead
     *   _startWeek <uint16> project first week as Week Index (default - previous week)
     *   _managerEquity <uint32> manager equity pool in Share Units
     *   _investorEquity <uint32> investor equity pool in Share Units
@@ -168,7 +168,7 @@ CollaborationAware          // @dev storage slot 2
     function _init(bytes memory initParams) internal {
         (
             address _collaboration,
-            bytes32 _terms,
+            address _projectLead,
             uint16 _startWeek,
             uint32 _managerEquity,
             uint32 _investorEquity,
@@ -176,11 +176,8 @@ CollaborationAware          // @dev storage slot 2
         ) = unpackInitParams(initParams);
 
         initCollaboration(_collaboration);
-        initRoles();
+        initRoles(_projectLead);
 
-        if (_terms != 0) {
-            terms = sha256(abi.encodePacked(_terms));
-        }
         if (_startWeek != 0) {
             require(_startWeek <= LATEST_START_WEEK, "too big startWeek");
             startWeek = _startWeek;
@@ -208,7 +205,9 @@ CollaborationAware          // @dev storage slot 2
         uint32 managerEquityPool,
         uint32 investorEquityPool
     ) {
-        return (laborEquity, managerEquity, investorEquity);
+        laborEquityPool = laborEquity;
+        managerEquityPool = managerEquity;
+        investorEquityPool = investorEquity;
     }
 
     function getWeights() external view returns(uint8[4] memory weights) {
@@ -309,16 +308,15 @@ CollaborationAware          // @dev storage slot 2
 
     /**
     * @dev Allows a new user to join
-    * @param _terms uint256 project terms of collaboration
+    * @param invitation uint256 reserved for future use
     */
-    function join(bytes32 _terms)
+    function join(bytes32 invitation)
         external
         senderIsNotMember
     {
-        require(terms == sha256(abi.encodePacked(_terms)), "terms mismatch");
         _members[msg.sender].status = Status.ACTIVE;
         _members[msg.sender].maxTimeWeekly = DEF_MAX_TIME_WEEKLY;
-        emit MemberJoined(msg.sender);
+        emit MemberJoined(msg.sender, invitation);
     }
 
     function setMemberStatus(
@@ -425,10 +423,11 @@ CollaborationAware          // @dev storage slot 2
     function getMemberShare(address member)
         external
         view
-        returns(uint64)
+        returns(uint64 share)
     {
-        require(totalWeightedTime != 0, "no hours submitted yet");
-        return uint64(laborEquity) * _members[member].weightedTime / totalWeightedTime;
+        if ((totalWeightedTime & _members[member].weightedTime) != 0) {
+            share = uint64(laborEquity) * _members[member].weightedTime / totalWeightedTime;
+        }
     }
 
     /**

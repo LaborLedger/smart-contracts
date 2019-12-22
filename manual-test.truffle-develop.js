@@ -5,21 +5,20 @@ with newly created 'truffle develop' network
 $ truffle exec manual-test.truffle-develop.js --network truffle --compile
 */
 
-/*
+/* Manual commands to debug
 let collaboration = await Collaboration.new()
 let implementation = await LaborLedgerImplementation.new()
 let packUnpack = await MockPackUnpack.new()
-let initParams = await packUnpack.pack(collaboration.address, web3.utils.fromAscii('the rest we test'), 2558, 400000, 300000, [1,2,3,4])
+let initParams = await packUnpack.pack(collaboration.address, 0, 2558, 400000, 300000, [1,2,3,4])
 await implementation.init(initParams)
 
-let inst = await LaborLedgerCaller.new(implementation.address, collaboration.address, web3.utils.fromAscii('the rest we test'), 2558, 400000, 300000, [1,2,3,4])
+let inst = await LaborLedgerCaller.new(implementation.address, collaboration.address, 0, 2558, 400000, 300000, [1,2,3,4])
 (await inst.getPastEvents({fromBlock:0, toBlock:1000})).map(e=>`${e.event}: ${e.raw.data}`)
 
 let co = new web3.eth.Contract(implementation.abi, inst.address)
 (await co.getPastEvents({fromBlock:0, toBlock:1000})).map(e=>`${JSON.stringify(e,null,2)}`)
 
 */
-
 
 const {advanceBlock, advanceTimeAndBlock} = require('./scripts/truffle-test-helper')(web3);
 const unixTimeNow = Number.parseInt(`${Date.now() / 1000}`);
@@ -40,14 +39,14 @@ module.exports = async function(callback) {
         memberAddress3,
         // nobody
     ] = await web3.eth.personal.getAccounts();
+    const zeroAddress = "0x0000000000000000000000000000000000000000";
     console.log('>>> defaultAccount ', defaultAccount);
     console.log('>>> projectLead ', projectLeadAddress);
     console.log('>>> member ', memberAddress);
     console.log('>>> member2 ', memberAddress2);
     console.log('>>> user3 ', memberAddress3);
 
-    const terms = 'the rest we test';
-    const hashedTerms = web3.utils.fromAscii(terms);
+    const invitation = web3.utils.fromAscii('the rest we test');
     const startWeek = 1;
     const managerEquity = 200000;
     const investorEquity = 100000;
@@ -74,17 +73,17 @@ module.exports = async function(callback) {
         console.log(`>> receipt = ${JSON.stringify(receipt, null, 2)}`);
 
         console.log('>>>> LaborLedgerCaller.new');
-        const caller = await LaborLedgerCaller.new(implementation.address, collaboration.address, hashedTerms, startWeek, managerEquity, investorEquity, weights);
+        const caller = await LaborLedgerCaller.new(implementation.address, collaboration.address, projectLeadAddress, startWeek, managerEquity, investorEquity, weights);
         receipt = await web3.eth.getTransactionReceipt(caller.transactionHash);
         console.log(`>> receipt = ${JSON.stringify(receipt, null, 2)}`);
 
         console.log('>>>> LaborLedgerCaller.new (2)');
-        const caller2 = await LaborLedgerCaller.new(implementation.address, collaboration.address, '0x0a0a', startWeek+1, managerEquity+1, investorEquity+1, weights);
+        const caller2 = await LaborLedgerCaller.new(implementation.address, collaboration.address, zeroAddress, startWeek+1, managerEquity+1, investorEquity+1, weights);
         receipt = await web3.eth.getTransactionReceipt(caller.transactionHash);
         console.log(`>> receipt = ${JSON.stringify(receipt, null, 2)}`);
 
-        const instance = new web3.eth.Contract(LaborLedgerImplementation.abi, caller.address);
-        console.log(`>> instance  = ${instance.options.address}`);
+        const instance1 = new web3.eth.Contract(LaborLedgerImplementation.abi, caller.address);
+        console.log(`>> instance1  = ${instance1.options.address}`);
 
         const instance2 = new web3.eth.Contract(LaborLedgerImplementation.abi, caller2.address);
         console.log(`>> instance2 = ${instance2.options.address}`);
@@ -102,7 +101,7 @@ module.exports = async function(callback) {
             submitTime,
             totalTime,
             totalWeightedTime
-        } = instance.methods;
+        } = instance1.methods;
 
         const {
             init: init2,
@@ -123,19 +122,18 @@ module.exports = async function(callback) {
         if (initParams2.length !== 66) throw new Error('invalid initParams');
         await init2(initParams2).send({from: defaultAccount}).then(fall).catch(logErr);
 
-        console.log('>>>> addProjectLead');
-        receipt = await addProjectLead(projectLeadAddress).send({from: defaultAccount});
-        console.log(`>> receipt = ${JSON.stringify(receipt, null, 2)}`);
-
-        console.log('>>>> addProjectLead second time');
-        await addProjectLead(projectLeadAddress).send({from: defaultAccount}).then(fall).catch(logErr);
+        console.log('>>>> addProjectLead (already is lead');
+        await addProjectLead(projectLeadAddress).send({from: defaultAccount}).catch(logErr);
 
         console.log('>>>> addProjectLead(2)');
         receipt = await addProjectLead2(memberAddress3).send({from: defaultAccount});
         console.log(`>> receipt = ${JSON.stringify(receipt, null, 2)}`);
 
+        console.log('>>>> addProjectLead(2) second time');
+        await addProjectLead2(memberAddress3).send({from: defaultAccount}).then(fall).catch(logErr);
+
         console.log('>>>> join member');
-        receipt = await join(hashedTerms).send({from: memberAddress});
+        receipt = await join(invitation).send({from: memberAddress});
         console.log(`>> receipt = ${JSON.stringify(receipt, null, 2)}`);
         memberStatus = await getMemberStatus(memberAddress).call();
         console.log(`>> memberStatus = ${memberStatus}`);
@@ -145,7 +143,7 @@ module.exports = async function(callback) {
         console.log(`>> receipt = ${JSON.stringify(receipt, null, 2)}`);
 
         console.log('>>>> join member3');
-        receipt = await join(hashedTerms).send({from: memberAddress3});
+        receipt = await join(invitation).send({from: memberAddress3});
         console.log(`>> receipt = ${JSON.stringify(receipt, null, 2)}`);
 
         advanceTimeAndBlock(7 * 24 * 3600);
@@ -163,7 +161,7 @@ module.exports = async function(callback) {
         // console.log(`>> receipt = ${JSON.stringify(receipt, null, 2)}`);
 
         console.log('>>>> join member2');
-        receipt = await join(hashedTerms).send({from: memberAddress2});
+        receipt = await join(invitation).send({from: memberAddress2});
         console.log(`>> receipt = ${JSON.stringify(receipt, null, 2)}`);
 
         console.log('>>>> set invalid statuses to member2');
@@ -197,7 +195,7 @@ module.exports = async function(callback) {
         console.log(`>> receipt = ${JSON.stringify(receipt, null, 2)}`);
 
         console.log('>>>> submitTime member3 being onhold');
-        receipt = await submitTime(weekNow + 1, [0, 0, 0, 5, 5, 0, 0]).send({from: memberAddress3, gas:300000}).then(fall).catch(logErr);
+        await submitTime(weekNow + 1, [0, 0, 0, 5, 5, 0, 0]).send({from: memberAddress3, gas:300000}).then(fall).catch(logErr);
 
         let memberData = await getMemberData(memberAddress).call();
         console.log(`>> member  Data = ${JSON.stringify(memberData, null, 2)}`);

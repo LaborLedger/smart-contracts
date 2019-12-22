@@ -7,19 +7,19 @@ contract UnpackedInitParamsAware is bytesUtilities {
      * @param initParams <bytes> packed params
      * @return unpacked params
      * @dev
-     * param: _collaboration  |_terms          |_startWeek |_managerEquity|_investorEquity|memberWeights
-     * byte#:  95..64(20bytes)| 63..32(32bytes)| 13 12     | 11 10 9 8    | 7 6 5 4       | 3  2  1  0
+     * param: _collaboration      |_projectLead    |_startWeek |_managerEquity|_investorEquity|memberWeights
+     * byte#:  95..64(20of32bytes)| 63..32(20bytes)| 13 12     | 11 10 9 8    | 7 6 5 4       | 3  2  1  0
      */
     function unpackInitParams(bytes memory initParams) internal pure returns (
         address _collaboration,
-        bytes32 _terms,
+        address _projectLead,
         uint16 _startWeek,
         uint32 _managerEquity,
         uint32 _investorEquity,
         uint32 _weights
     ) {
         _collaboration = address(_unpackUint256FromBytes(initParams, 2));
-        _terms = bytes32(_unpackUint256FromBytes(initParams, 1));
+        _projectLead = address(_unpackUint256FromBytes(initParams, 1));
         uint256  rest = _unpackUint256FromBytes(initParams, 0);
 
         _startWeek = uint16((rest >> 96) & 0xFFFF);

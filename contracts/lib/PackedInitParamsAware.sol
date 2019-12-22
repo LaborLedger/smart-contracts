@@ -7,12 +7,12 @@ contract PackedInitParamsAware is bytesUtilities {
     /**
     * @return initParams <bytes32> packed init params
     * @dev
-    * param: _collaboration  |_terms          |_startWeek |_managerEquity|_investorEquity|memberWeights
-    * byte#:  95..64(20bytes)| 63..32(32bytes)| 13 12     | 11 10 9 8    | 7 6 5 4       | 3  2  1  0
+    * param: _collaboration        |_projectLead    |_startWeek |_managerEquity|_investorEquity|memberWeights
+    * byte#:  95..64(20from32bytes)| 63..32(20bytes)| 13 12     | 11 10 9 8    | 7 6 5 4       | 3  2  1  0
     */
     function packInitParams(
         address _collaboration,
-        bytes32 _terms,
+        address _projectLead,
         uint16 _startWeek,
         uint32 _managerEquity,
         uint32 _investorEquity,
@@ -23,7 +23,7 @@ contract PackedInitParamsAware is bytesUtilities {
 
         initParams = _packThreeUint256ToBytes(
             b,
-            uint256(_terms),
+            uint256(_projectLead),
             uint256(_collaboration)
         );
     }

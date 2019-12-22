@@ -8,7 +8,7 @@ contract LaborLedgerCaller is PackedInitParamsAware, UpgradableProxy {
     /**
      * @param implementation <address> instance of LaborLedgerImplementation contract
      * @param _collaboration <address> instance of Collaboration contract
-     * @param _terms <bytes32> project terms of collaboration
+     * @param _projectLead <address> address of project lead
      * @param _startWeek <uint16> project first week as Week Index (default - previous week)
      * @param _managerEquity <uint32> manager equity pool in Share Units
      * @param _investorEquity <uint32> investor equity pool in Share Units
@@ -20,7 +20,7 @@ contract LaborLedgerCaller is PackedInitParamsAware, UpgradableProxy {
     constructor (
         address implementation,
         address _collaboration,
-        bytes32 _terms,
+        address _projectLead,
         uint16 _startWeek,
         uint32 _managerEquity,
         uint32 _investorEquity,
@@ -31,7 +31,7 @@ contract LaborLedgerCaller is PackedInitParamsAware, UpgradableProxy {
 
         bytes memory initParams = packInitParams(
             _collaboration,
-            _terms,
+            _projectLead,
             _startWeek,
             _managerEquity,
             _investorEquity,

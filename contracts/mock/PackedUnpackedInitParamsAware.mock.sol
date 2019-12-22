@@ -7,19 +7,19 @@ contract MockPackUnpack is PackedInitParamsAware, UnpackedInitParamsAware {
 
     function pack(
         address _collaboration,
-        bytes32 _terms,
+        address _projectLead,
         uint16 _startWeek,
         uint32 _managerEquity,
         uint32 _investorEquity,
         uint8[4] memory _weights
     ) public pure returns (bytes memory) {
         uint32 packed = packWeights(_weights);
-        return packInitParams(_collaboration, _terms, _startWeek, _managerEquity, _investorEquity, packed);
+        return packInitParams(_collaboration, _projectLead, _startWeek, _managerEquity, _investorEquity, packed);
     }
 
     function unpack(bytes memory initParams) public pure returns (
     address _collaboration,
-    bytes32 _terms,
+    address _projectLead,
     uint16 _startWeek,
     uint32 _managerEquity,
     uint32 _investorEquity,
@@ -28,7 +28,7 @@ contract MockPackUnpack is PackedInitParamsAware, UnpackedInitParamsAware {
         uint32 packed;
         (
             _collaboration,
-            _terms,
+            _projectLead,
             _startWeek,
             _managerEquity,
             _investorEquity,
