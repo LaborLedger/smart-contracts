@@ -13,10 +13,10 @@ contract Constants {
     uint32 constant MEMBER_WEIGHTS = 0x04030200;
 
     // in Share Units
-    uint32 LABOR_EQUITY = 100000;
-    uint32 MANAGER_EQUITY = 900000;
-    uint32 INVESTOR_EQUITY = 0;
-    uint32 HUNDRED_PERCENT = 1000000;
+    uint32 constant LABOR_EQUITY = 100000;
+    uint32 constant MANAGER_EQUITY = 900000;
+    uint32 constant INVESTOR_EQUITY = 0;
+    uint32 constant HUNDRED_PERCENT = 1000000;
 
     // Selector for ERC-165
     bytes4 constant INIT_INTERFACE_ID = 0x4ddf47d4;             // i.e. `bytes4(keccak256("init(bytes)"))`
