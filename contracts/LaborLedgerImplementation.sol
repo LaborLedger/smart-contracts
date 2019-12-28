@@ -267,43 +267,43 @@ CollaborationAware          // @dev storage slot 2
     }
 
     /**
-    * @dev Set user weight. Can only be done once. Only project lead can call
-    * @param user User whose weight has to be set
-    * @param weightIndex Weight of the user (the index in _memberWeights)
+    * @dev Set member weight. Can only be done once. Only project lead can call
+    * @param member User whose weight has to be set
+    * @param weightIndex Weight of the member (the index in _memberWeights)
     */
     function setMemberWeight(
-        address user,
+        address member,
         Weight weightIndex
     )
         external
         onlyProjectLead
-        memberExists(user)
+        memberExists(member)
     {
-        require(_members[user].weight == 0, "weight already set");
+        require(_members[member].weight == 0, "weight already set");
         require(weightIndex != Weight._, "invalid weightIndex");
 
         uint8[4] memory weights = unpackWeights(_memberWeights);
         uint8 _weight = weights[uint8(weightIndex)];
-        _members[user].weight = _weight;
+        _members[member].weight = _weight;
 
-        uint32 weighted = _members[msg.sender].time * _weight;
-        _members[msg.sender].weightedTime += weighted;
+        uint32 weighted = _members[member].time * _weight;
+        _members[member].weightedTime += weighted;
         totalWeightedTime += weighted;
 
-        emit MemberWeightAssigned(user, weightIndex, weighted);
+        emit MemberWeightAssigned(member, weightIndex, weighted);
     }
 
     /**
-    * @dev Returns user weight
-    * @param user User whose weight needs to be returned
+    * @dev Returns member weight
+    * @param member User whose weight needs to be returned
     */
-    function getMemberWeight(address user)
+    function getMemberWeight(address member)
         external
         view
-        memberExists(user)
+        memberExists(member)
     returns(uint8)
     {
-        return _members[user].weight;
+        return _members[member].weight;
     }
 
     /**
