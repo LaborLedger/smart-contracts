@@ -1,5 +1,139 @@
+########################################################################################################################
+# Deployment on the repsten network on 28-Dec-2019
+###
 
-####
+audacity-dao/ethereum$ source .env.sh
+audacity-dao/ethereum$ truffle console --network ropsten
+truffle(ropsten)> await web3.eth.getAccounts()
+[
+  '0x81b9EB22f1a96D30d7Afd1eC9975546008e3008D',
+  ...
+]
+truffle(ropsten)> compile
+Compiling your contracts...
+===========================
+> Compiling ./contracts/LaborLedgerCaller.sol
+> Compiling ./contracts/lib/Proxy.sol
+> Compiling ./contracts/lib/UpgradableProxy.sol
+> Artifacts written to /home/konstantinovv/source/audacity-dao/ethereum/build/contracts
+> Compiled successfully using:
+   - solc: 0.5.13+commit.5b0b510c.Emscripten.clang
+
+truffle(ropsten)> collaboration = {address: '0xDBd81be39794969714774260C90481A449783D34'}
+
+truffle(ropsten)> const implementation = await LaborLedgerImplementation.new()
+truffle(ropsten)> implementation.address
+'0x04b30B5790D1E714Ff33d76B42bCdF8aEd9b9520'
+truffle(ropsten)> implementation.transactionHash
+'0x802d72eb42f40d827e20acde7b1557b3bf81b8fba79f80abb61a9eb63eff7fe1'
+
+truffle(ropsten)> // test LaborRegister instance
+truffle(ropsten)> const projectLeadAddress = '0x7d30E251bb9B003ca231A4b4f7BD7fB300ba71E0'
+truffle(ropsten)> const c1 = await LaborLedgerCaller.new(implementation.address, collaboration.address, projectLeadAddress, 0, 0, 0, [0,0,0,0])
+truffle(ropsten)> c1.address
+'0x1683BA72B4d8dce4416DdCE69521CFA13d4A9238'
+truffle(ropsten)> c1.transactionHash
+'0x00b30f629b9adc14af1052be347b8a234a971ea04914d4a8194d43112ba880da'
+truffle(ropsten)> const labReg = new web3.eth.Contract(implementation.abi, c1.address)
+truffle(ropsten)> await labReg.methods.birthBlock().call()
+'7044998'
+truffle(ropsten)> await labReg.getPastEvents({fromBlock: '7044998', toBlock:'latest'})
+[
+  {
+    address: '0x1683BA72B4d8dce4416DdCE69521CFA13d4A9238',
+    blockHash: '0x719ae5df5ccd36054fc4eec192e00660a5381856cc46b8af2e7a9bbe7d7d26aa',
+    blockNumber: 7044998,
+    logIndex: 18,
+    removed: false,
+    transactionHash: '0x00b30f629b9adc14af1052be347b8a234a971ea04914d4a8194d43112ba880da',
+    transactionIndex: 7,
+    id: 'log_fc0828f3',
+    returnValues: Result {},
+    event: undefined,
+    signature: null,
+    raw: { data: '0x', topics: [Array] }
+  },
+  {
+    address: '0x1683BA72B4d8dce4416DdCE69521CFA13d4A9238',
+    blockHash: '0x719ae5df5ccd36054fc4eec192e00660a5381856cc46b8af2e7a9bbe7d7d26aa',
+    blockNumber: 7044998,
+    logIndex: 20,
+    removed: false,
+    transactionHash: '0x00b30f629b9adc14af1052be347b8a234a971ea04914d4a8194d43112ba880da',
+    transactionIndex: 7,
+    id: 'log_97077379',
+    returnValues: Result {
+      '0': '0x7d30E251bb9B003ca231A4b4f7BD7fB300ba71E0',
+      account: '0x7d30E251bb9B003ca231A4b4f7BD7fB300ba71E0'
+    },
+    event: 'ProjectLeadAdded',
+    signature: '0x1bccbd93fc5df6b4ce19a0899fdd845439aa809d36aa308c3cbe1cd0f2fa1d8f',
+    raw: { data: '0x', topics: [Array] }
+  },
+  {
+    address: '0x1683BA72B4d8dce4416DdCE69521CFA13d4A9238',
+    blockHash: '0x719ae5df5ccd36054fc4eec192e00660a5381856cc46b8af2e7a9bbe7d7d26aa',
+    blockNumber: 7044998,
+    logIndex: 21,
+    removed: false,
+    transactionHash: '0x00b30f629b9adc14af1052be347b8a234a971ea04914d4a8194d43112ba880da',
+    transactionIndex: 7,
+    id: 'log_162e7f22',
+    returnValues: Result {
+      '0': '0x7d30E251bb9B003ca231A4b4f7BD7fB300ba71E0',
+      account: '0x7d30E251bb9B003ca231A4b4f7BD7fB300ba71E0'
+    },
+    event: 'ProjectQuorumAdded',
+    signature: '0x9e875cf4c0cc996851b56b5b5c6e70e5c1fb3c724d3290c99450c722641c60dc',
+    raw: { data: '0x', topics: [Array] }
+  },
+  {
+    address: '0x1683BA72B4d8dce4416DdCE69521CFA13d4A9238',
+    blockHash: '0x719ae5df5ccd36054fc4eec192e00660a5381856cc46b8af2e7a9bbe7d7d26aa',
+    blockNumber: 7044998,
+    logIndex: 22,
+    removed: false,
+    transactionHash: '0x00b30f629b9adc14af1052be347b8a234a971ea04914d4a8194d43112ba880da',
+    transactionIndex: 7,
+    id: 'log_a2aac28e',
+    returnValues: Result {
+      '0': '100000',
+      '1': '900000',
+      '2': '0',
+      newLaborEquity: '100000',
+      newManagerEquity: '900000',
+      newInvestorEquity: '0'
+    },
+    event: 'EquityModified',
+    signature: '0x2771dae93c2d46e7c297bb80fd6ab859a06a6b09912c1aca067adfde4a96b36a',
+    raw: {
+      data: '0x00000000000000000000000000000000000000000000000000000000000186a000000000000000000000000000000000000000000000000000000000000dbba00000000000000000000000000000000000000000000000000000000000000000',
+      topics: [Array]
+    }
+  }
+]
+truffle(ropsten)> web3.eth.getStorageAt(labReg.options.address,0)
+// implementor
+'0x00000000000000000000000081b9eb22f1a96d30d7afd1ec9975546008e3008d'
+truffle(ropsten)> web3.eth.getStorageAt(labReg.options.address,1)
+// _implementation
+'0x00000000000000000000000004b30b5790d1e714ff33d76b42bcdf8aed9b9520'
+truffle(ropsten)> web3.eth.getStorageAt(labReg.options.address,2)
+// collaboration
+'0x000000000000000000000000dbd81be39794969714774260c90481a449783d34'
+truffle(ropsten)> web3.eth.getStorageAt(labReg.options.address,3)
+// reserved
+'0x0000000000000000000000000000000000000000000000000000000000000000'
+truffle(ropsten)> web3.eth.getStorageAt(labReg.options.address,4)
+// investorEquity (0), managerEquity (0x000dbba0), laborEquity 0x000186a0,
+// _unused, totalWeightedTime, totalTime,
+// _memberWeights 0x40302000, startWeek 0x0a2f, birthBlock 006b7f86
+'0x00000000000dbba0000186a000000000000000000000040302000a2f006b7f86'
+truffle(ropsten)> web3.eth.getStorageAt(labReg.options.address,5)
+// mapping(address => Member) private _members
+'0x0000000000000000000000000000000000000000000000000000000000000000'
+
+########################################################################################################################
 # Deployment on the repsten network on 22-Dec-2019
 ###
 
