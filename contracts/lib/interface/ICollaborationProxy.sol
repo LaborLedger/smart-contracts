@@ -15,7 +15,6 @@ interface ICollaborationProxy {
     */
     function initialize(
         bytes32 uid,
-        address logger,
         address quorum,
         address inviter,
         uint32 managerEquity,

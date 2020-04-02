@@ -5,7 +5,6 @@ import "./lib/CollaborationRoles.sol";
 import "./lib/Erc165Compatible.sol";
 import "./lib/interface/IErc165Compatible.sol";
 import "./lib/interface/ICollaboration.sol";
-import "./lib/interface/ILogger.sol";
 import "./lib/Invites.sol";
 import "./LaborLedgerProxy.sol";
 
@@ -22,7 +21,6 @@ contract CollaborationImpl is
     struct Collaboration {
         bytes32 uid;
         address laborLedger;
-        address logger;
                                     // Equity pools expressed in Share Units (100%=(1)+(2)+(3))
         uint32 managerEquity;       // (1) management equity pool
         uint32 investorEquity;      // (2) investor equity pool
@@ -48,7 +46,6 @@ contract CollaborationImpl is
     */
     function initialize(
         bytes32 uid,
-        address logger,
         address quorum,
         address inviter,
         uint32 managerEquity,
@@ -63,11 +60,6 @@ contract CollaborationImpl is
     ) public initializer
     {
         _collab.uid = uid;
-
-        require(logger != address(0), "Invalid logger address");
-        bytes4 result = ILogger(logger).logAddress(address(this));
-        require(result == LOGADDRESS_SEL, "Invalid logger");
-        _collab.logger = logger;
 
         CollaborationRoles._initialize(quorum, inviter);
 
