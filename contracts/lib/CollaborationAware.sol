@@ -1,20 +1,51 @@
 pragma solidity 0.5.13;
 
+import "@openzeppelin/contracts-ethereum-package/contracts/GSN/Context.sol";
 import "./Constants.sol";
-import "./ICollaboration.sol";
+import "./interface/ICollaboration.sol";
 
-contract CollaborationAware is Constants {
+contract CollaborationAware is Context, Constants {
 
     // address of the collaboration smart-contract
-    address public collaboration;
+    address internal _collaboration;
 
-    // @dev "constructor" function that shall be called on the "Proxy Caller" deployment
-    function initCollaboration(address _collaboration) internal {
-        require(_collaboration != address(0), "Invalid Collaboration address");
+    // reserved for upgrades
+    uint256[10] __gap;
 
-        bytes4 result = ICollaboration(_collaboration).logLaborLedger(address(this));
-        require(result == LOGLABORLEDGER__INTERFACE_ID, "LogLaborLager unsupported");
+    event InviteUsed(bytes32 indexed inviteHash, address indexed member);
 
-        collaboration = _collaboration;
+    modifier onlyCollaboration() {
+        require(
+            isCollaboration(_msgSender()),
+            "sender is not the Collaboration"
+        );
+        _;
+    }
+
+    function getCollaboration() public view returns(address) {
+        return _collaboration;
+    }
+
+    // @dev "constructor" to be called on deployment
+    function _initialize(address collaboration) internal {
+        require(collaboration != address(0), "Invalid Collaboration address");
+        _collaboration = collaboration;
+    }
+
+    function isCollaboration(address account) public view returns (bool) {
+        return account == getCollaboration();
+    }
+
+    function isQuorum(address account) public view returns(bool) {
+        return ICollaboration(getCollaboration()).isQuorum(account);
+    }
+
+    function _getInvite(bytes32 inviteHash) internal view returns(bytes32) {
+        return ICollaboration(getCollaboration()).getInvite(inviteHash);
+    }
+
+    function _clearInvite(bytes32 inviteHash, address member) internal {
+        ICollaboration(getCollaboration()).clearInvite(inviteHash);
+        emit InviteUsed(inviteHash, member);
     }
 }

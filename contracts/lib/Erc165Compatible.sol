@@ -1,6 +1,6 @@
 pragma solidity 0.5.13;
 
-import "./IErc165Compatible.sol";
+import "./interface/IErc165Compatible.sol";
 
 contract Erc165Compatible is IErc165Compatible {
 
@@ -17,7 +17,7 @@ contract Erc165Compatible is IErc165Compatible {
     /**
     * @dev a Child-class is expected to re-define the method
     */
-    function _supportInterface(bytes4 interfaceID) private pure returns (bool) {
+    function _supportInterface(bytes4 interfaceID) internal pure returns (bool) {
         return interfaceID == erc165Selector;
     }
 }
