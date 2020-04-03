@@ -12,8 +12,6 @@ contract CollaborationAware is Context, Constants {
     // reserved for upgrades
     uint256[10] __gap;
 
-    event InviteUsed(bytes32 indexed inviteHash, address indexed member);
-
     modifier onlyCollaboration() {
         require(
             isCollaboration(_msgSender()),
@@ -40,12 +38,11 @@ contract CollaborationAware is Context, Constants {
         return ICollaboration(getCollaboration()).isQuorum(account);
     }
 
-    function _getInvite(bytes32 inviteHash) internal view returns(bytes32) {
-        return ICollaboration(getCollaboration()).getInvite(inviteHash);
+    function _getInvite(bytes memory invite) internal view returns(bytes32) {
+        return ICollaboration(getCollaboration()).getInvite(invite);
     }
 
-    function _clearInvite(bytes32 inviteHash, address member) internal {
-        ICollaboration(getCollaboration()).clearInvite(inviteHash);
-        emit InviteUsed(inviteHash, member);
+    function _clearInvite(bytes memory invite) internal {
+        ICollaboration(getCollaboration()).clearInvite(invite);
     }
 }

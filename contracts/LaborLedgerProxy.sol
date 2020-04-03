@@ -22,6 +22,7 @@ contract LaborLedgerProxy is AdminUpgradeabilityProxy {
      */
     constructor (
         address implementation,
+        address proxyAdmin,
         address collaboration,
         address projectLead,
         address projectArbiter,
@@ -31,7 +32,7 @@ contract LaborLedgerProxy is AdminUpgradeabilityProxy {
     )
         AdminUpgradeabilityProxy(
             implementation,
-            msg.sender,
+            proxyAdmin,
             // `data` to call the <LaborLedgerInitialize.initialize>
             abi.encodeWithSelector(
                 ILaborLedger(implementation).initialize.selector,

@@ -31,6 +31,8 @@ contract CollaborationImpl is
 
     uint256[10] __gap;              // reserved for upgrades
 
+    event LaborLedger(address indexed account);
+
     event EquityModified(
         // in Share Units
         uint32 newManagerEquity,
@@ -45,6 +47,7 @@ contract CollaborationImpl is
     * @param investorEquity <uint32> investor equity pool in Share Units
     */
     function initialize(
+        address proxyAdmin,
         bytes32 uid,
         address quorum,
         address inviter,
@@ -71,6 +74,7 @@ contract CollaborationImpl is
 
         _collab.laborLedger = address(new LaborLedgerProxy(
             laborLedgerImpl,
+            proxyAdmin,
             address(this),
             projectLead,
             projectArbiter,
@@ -78,11 +82,16 @@ contract CollaborationImpl is
             startWeek,
             weights
         ));
+        emit LaborLedger(_collab.laborLedger);
     }
 
     function getUid() external view returns(bytes32)
     {
         return _collab.uid;
+    }
+
+    function getLaborLedger() external view returns(address) {
+        return _collab.laborLedger;
     }
 
     function getEquity() external view
@@ -121,12 +130,11 @@ contract CollaborationImpl is
 
 
     function cancelInvite(bytes32 inviteHash) external onlyInviter {
-        _clearInvite(inviteHash);
+        _cancelInvite(inviteHash);
     }
 
-    function clearInvite(bytes32 inviteHash) external {
-        require(_msgSender() == _collab.laborLedger, "sender can't clear invites");
-        _clearInvite(inviteHash);
+    function clearInvite(bytes calldata invite) external {
+        _clearInvite(invite);
     }
 
     function _setEquity(uint32 managerEquity, uint32 investorEquity, uint32 laborEquity) internal

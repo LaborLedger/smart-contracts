@@ -8,11 +8,16 @@ contract Invites {
     uint256[10] __gap;              // reserved for upgrades
 
     event NewInvite(bytes32 inviteHash);
-    event InviteCleared(bytes32 inviteHash);
+    event KilledInvite(bytes32 inviteHash);
 
-    function getInvite(bytes32 inviteHash) external view returns(bytes32)
+    function getInvite(bytes calldata invite) external view returns(bytes32)
     {
-        return _invites[inviteHash];
+        return _invites[keccak256(invite)];
+    }
+
+    function isInvite(bytes32 inviteHash) external view returns(bool)
+    {
+        return uint256(_invites[inviteHash]) != 0;
     }
 
     function _newInvite(bytes32 inviteHash, bytes32 inviteData) internal {
@@ -22,10 +27,16 @@ contract Invites {
         emit NewInvite(inviteHash);
     }
 
-    function _clearInvite(bytes32 inviteHash) internal {
-        if (_invites[inviteHash] != 0) {
-            delete _invites[inviteHash];
-            emit InviteCleared(inviteHash);
-        }
+    function _clearInvite(bytes memory invite) internal {
+        bytes32 inviteHash = keccak256(invite);
+        _cancelInvite(inviteHash);
     }
+
+    function _cancelInvite(bytes32 inviteHash) internal {
+        require(_invites[inviteHash] != 0, "Invalid or cleared invite");
+
+        delete _invites[inviteHash];
+        emit KilledInvite(inviteHash);
+    }
+
 }

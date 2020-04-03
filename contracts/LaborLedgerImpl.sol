@@ -190,17 +190,17 @@ LaborRegister
 
     /**
     * @dev Allows a new user to join
-    * @param inviteHash bytes32 reserved for future use
+    * @param invite Invitation
     */
-    function join(bytes32 inviteHash) external
+    function join(bytes calldata invite) external
     {
-        _join(_msgSender(), inviteHash);
+        _join(_msgSender(), invite);
     }
 
-    function joinFor(address user, bytes32 inviteHash) external
+    function joinFor(address user, bytes calldata invite) external
     {
         require(isOperatorFor(_msgSender(), user), "unauthorized operator");
-        _join(user, inviteHash);
+        _join(user, invite);
     }
 
     /**
@@ -278,16 +278,16 @@ LaborRegister
         _setMemberTimePerWeek(member, maxTime);
     }
 
-    function _join(address member, bytes32 inviteHash) internal
+    function _join(address member, bytes memory invite) internal
     {
         (
         Status status,
         uint8 weight,
         uint16 startWeek,
         uint16 maxWeeklyTime
-        ) =_decodeInvite(inviteHash);
+        ) =_decodeInvite(invite);
         _joinMember(member, status, weight, startWeek, maxWeeklyTime);
-        _clearInvite(inviteHash, member);
+        _clearInvite(invite);
     }
 
     function _submitTime(
@@ -303,7 +303,7 @@ LaborRegister
         _project.labor = _project.time.addSigned(labor);
     }
 
-    function _decodeInvite(bytes32 inviteHash) internal view
+    function _decodeInvite(bytes memory invite) internal view
     returns(
         Status status,
         uint8 weight,
@@ -311,11 +311,11 @@ LaborRegister
         uint16 maxWeeklyTime
     )
     {
-        bytes32 invite = _getInvite(inviteHash);
+        bytes32 inviteData = _getInvite(invite);
         // TODO: set member params then retrieve them via invites
-        require(invite == 0, "invite params yet unsupported");
+        require(uint256(inviteData) == 1, "invite params yet unsupported");
         return (
-        Status.UNKNOWN, NO_WEIGHT, _project.startWeek, STD_MAX_TIME_WEEKLY
+            Status.UNKNOWN, NO_WEIGHT, _project.startWeek, STD_MAX_TIME_WEEKLY
         );
     }
 
