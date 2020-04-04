@@ -109,9 +109,34 @@ LaborRegister
         }
     }
 
+    function getBirthBlock() external view returns(uint32)
+    {
+        return _project.birthBlock;
+    }
+
+    function getStartWeek() external view returns(uint16)
+    {
+        return (_project.startWeek);
+    }
+
     function getWeights() external view returns(uint8[4] memory weights)
     {
         weights = _unpackWeights(_project.weights);
+    }
+
+    function getTotalTime() external view returns(uint32)
+    {
+        return (_project.time);
+    }
+
+    function getTotalLabor() external view
+        returns(uint32 labor, uint32 settledLabor, uint32 netLabor)
+    {
+        return (
+            _project.labor,
+            _project.settledLabor,
+            _project.labor - _project.settledLabor
+        );
     }
 
     /**
@@ -125,10 +150,10 @@ LaborRegister
         uint32 projectNetLabor = _project.labor.sub(_project.settledLabor);
         if (projectNetLabor == 0) return 0;
 
-        uint32 memberNetLabor = _getMemberNetLabor(member);
-        if (memberNetLabor == 0) return 0;
+        uint32 netLabor = _getMemberNetLabor(member);
+        if (netLabor == 0) return 0;
 
-        share = uint64(HUNDRED_PERCENT) * memberNetLabor / projectNetLabor;
+        share = uint64(HUNDRED_PERCENT) * netLabor / projectNetLabor;
     }
 
     function setMemberStatus(address member, Status status) external
@@ -137,7 +162,7 @@ LaborRegister
         _setMemberStatus(member, status);
     }
 
-    function setMemberStatusFor(address lead, address member, Status status)
+    function setMemberStatus(address lead, address member, Status status)
     external
     {
         require(isProjectLead(lead), "unauthorized lead");
@@ -153,10 +178,10 @@ LaborRegister
     function setMemberWeight(address member, WeightInd weightInd) external
     onlyProjectLead
     {
-        _setMemberWeight(member, weightInd);
+        _setMemberWeight(member, weightInd, true);
     }
 
-    function setMemberWeightFor(
+    function setMemberWeight(
         address lead,
         address member,
         WeightInd weightInd
@@ -164,7 +189,7 @@ LaborRegister
     {
         require(isProjectLead(lead), "unauthorized lead");
         require(isOperatorFor(_msgSender(), lead), "unauthorized operator");
-        _setMemberWeight(member, weightInd);
+        _setMemberWeight(member, weightInd, true);
     }
 
     /**
@@ -177,7 +202,7 @@ LaborRegister
         _setMemberWeekLimit(member, maxTime);
     }
 
-    function setMemberWeekLimitFor(
+    function setMemberWeekLimit(
         address lead,
         address member,
         uint16 maxTime
@@ -192,15 +217,31 @@ LaborRegister
     * @dev Allows a new user to join
     * @param invite Invitation
     */
-    function join(bytes calldata invite) external
+    function join(
+        bytes calldata invite,
+        Status status,
+        WeightInd weightInd,
+        uint16 startWeek,
+        uint16 maxTimeWeekly,
+        uint160 terms
+    ) external
     {
-        _join(_msgSender(), invite);
+        _join(_msgSender(), invite, status, weightInd, startWeek, maxTimeWeekly, terms);
     }
 
-    function joinFor(address user, bytes calldata invite) external
+    function join(
+        address user,
+        bytes calldata invite,
+        Status status,
+        WeightInd weightInd,
+        uint16 startWeek,
+        uint16 maxTimeWeekly,
+        uint terms
+    ) external
     {
         require(isOperatorFor(_msgSender(), user), "unauthorized operator");
-        _join(user, invite);
+        _join(user, invite, status, weightInd, startWeek, maxTimeWeekly, terms);
+
     }
 
     /**
@@ -218,7 +259,7 @@ LaborRegister
         _submitTime(_msgSender(), week, time, uid, true);
     }
 
-    function submitTimeFor(
+    function submitTime(
         address member,
         uint16 week,
         int32 time,
@@ -227,6 +268,23 @@ LaborRegister
     {
         require(isOperatorFor(_msgSender(), member), "unauthorized operator");
         _submitTime(member, week, time, uid, true);
+    }
+
+    function updateMemberWeight(address member, WeightInd weightInd) external
+    onlyProjectArbiter
+    {
+        _setMemberWeight(member, weightInd, false);
+    }
+
+    function updateMemberWeight(
+        address arbiter,
+        address member,
+        WeightInd weightInd
+    ) external
+    {
+        require(isProjectArbiter(arbiter), "unauthorized arbiter");
+        require(isOperatorFor(_msgSender(), arbiter), "unauthorized operator");
+        _setMemberWeight(member, weightInd, false);
     }
 
     /**
@@ -243,7 +301,7 @@ LaborRegister
         _submitTime(member, week, time, uid, false);
     }
 
-    function updateTimeFor(
+    function updateTime(
         address arbiter,
         address member,
         uint16 week,
@@ -263,12 +321,24 @@ LaborRegister
         return LABORLEDGER_IFACE;
     }
 
-    function _setMemberWeight(address member, WeightInd weightInd) internal
+    function getWeight(WeightInd weightInd) public view returns(uint8 weight)
     {
         uint8[4] memory weights = _unpackWeights(_project.weights);
-        uint8 weight = weights[uint8(weightInd)];
+        weight = weights[uint8(weightInd)];
+    }
 
-        uint32 labor = _setMemberWeight(member, weight);
+    function encodeInviteData (
+        uint status, uint weightInd, uint startWeek, uint maxWeeklyTime, uint terms
+    ) public pure returns(bytes32)
+    {
+        return keccak256(
+            abi.encodePacked(status, weightInd, startWeek, maxWeeklyTime, terms)
+        );
+    }
+
+    function _setMemberWeight(address member, WeightInd weightInd, bool onceOnly) internal
+    {
+        uint32 labor = _setMemberWeight(member, getWeight(weightInd), onceOnly);
         _project.labor = _project.time.add(labor);
     }
 
@@ -278,15 +348,27 @@ LaborRegister
         _setMemberTimePerWeek(member, maxTime);
     }
 
-    function _join(address member, bytes memory invite) internal
-    {
-        (
+    function _join(
+        address member,
+        bytes memory invite,
         Status status,
-        uint8 weight,
+        WeightInd weightInd,
         uint16 startWeek,
-        uint16 maxWeeklyTime
-        ) =_decodeInvite(invite);
-        _joinMember(member, status, weight, startWeek, maxWeeklyTime);
+        uint16 maxWeeklyTime,
+        uint terms
+    ) internal
+    {
+        _validateInvite(
+            invite,
+            uint(status),
+            uint(weightInd),
+            uint(startWeek),
+            uint(maxWeeklyTime),
+            terms
+        );
+        uint16 wTime = maxWeeklyTime == 0 ? STD_MAX_TIME_WEEKLY : maxWeeklyTime;
+
+        _joinMember(member, status, getWeight(weightInd), startWeek, wTime);
         _clearInvite(invite);
     }
 
@@ -303,19 +385,19 @@ LaborRegister
         _project.labor = _project.time.addSigned(labor);
     }
 
-    function _decodeInvite(bytes memory invite) internal view
-    returns(
-        Status status,
-        uint8 weight,
-        uint16 startWeek,
-        uint16 maxWeeklyTime
-    )
+    function _validateInvite(
+        bytes memory invite,
+        uint status,
+        uint weightInd,
+        uint startWeek,
+        uint maxWeeklyTime,
+        uint terms
+    ) internal view
     {
-        bytes32 inviteData = _getInvite(invite);
-        // TODO: set member params then retrieve them via invites
-        require(uint256(inviteData) == 1, "invite params yet unsupported");
-        return (
-            Status.UNKNOWN, NO_WEIGHT, _project.startWeek, STD_MAX_TIME_WEEKLY
+        require(
+            uint(_getInvite(invite)) == uint(
+                encodeInviteData(status, weightInd, startWeek, maxWeeklyTime, terms)
+            ), "invite data unmatched"
         );
     }
 

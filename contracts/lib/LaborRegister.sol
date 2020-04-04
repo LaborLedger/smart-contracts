@@ -125,15 +125,10 @@ contract LaborRegister is Constants, WeeksList
         return _members[member].time;
     }
 
-    /**
-    * @dev Returns "net" (or "outstanding") labor of a member
-    * that is the total labor worked by the member minus the settled (e.g. paid) labor
-    * @param member Address of the member
-    * @return uint32 Net labor in Labor Units
-    */
-    function getMemberNetLabor(address member) external view returns(uint32)
+    function getMemberLabor(address member) external view
+        returns(uint32 labor, uint32 settledLabor, uint32 netLabor)
     {
-        return _getMemberNetLabor(member);
+        return _getMemberLabor(member);
     }
 
     /**
@@ -142,17 +137,12 @@ contract LaborRegister is Constants, WeeksList
     * @return status <Status>
     * @return weight <uint8> as factor (not the index)
     * @return startWeek as Week Index
-    * @return time <uint32> in Time Units
-    * @return labor <uint32> in Labor Units
     */
     function getMemberData(address member) external view
     returns (
         Status status,
         uint8 weight,
         uint16 startWeek,
-        uint32 time,
-        uint32 labor,
-        uint32 settledLabor,
         uint16 recentWeeks
     )
     {
@@ -160,16 +150,25 @@ contract LaborRegister is Constants, WeeksList
         _members[member].status,
         _members[member].weight,
         _members[member].startWeek,
-        _members[member].time,
-        _members[member].labor,
-        _members[member].settledLabor,
         _members[member].recentWeeks
         );
     }
 
-    function _getMemberNetLabor(address member) internal view returns(uint32)
+    function _getMemberLabor(address member) internal view
+        returns(uint32 labor, uint32 settledLabor, uint32 netLabor)
     {
-        return _members[member].labor - _members[member].settledLabor;
+        return (
+            _members[member].labor,
+            _members[member].settledLabor,
+            _members[member].labor.sub(_members[member].settledLabor)
+        );
+    }
+
+    function _getMemberNetLabor(address member) internal view
+        returns(uint32)
+    {
+        if (_members[member].labor == 0) return 0;
+        return _members[member].labor.sub(_members[member].settledLabor);
     }
 
     function _joinMember(
@@ -187,6 +186,7 @@ contract LaborRegister is Constants, WeeksList
 
         if (weight != NO_WEIGHT) {
             _members[member].weight = weight;
+            emit MemberWeightAssigned(member, weight, 0);
         }
 
         emit MemberJoined(member, _members[member].startWeek, _members[member].status, weight);
@@ -206,11 +206,14 @@ contract LaborRegister is Constants, WeeksList
     * @param weight Weight of the member (factor to convert time into labor)
     * @return labor Labor units accounted for `time` of the member accumulated so far
     */
-    function _setMemberWeight(address member, uint8 weight) internal
+    function _setMemberWeight(address member, uint8 weight, bool onceOnly) internal
     memberExists(member)
     returns (uint32 labor)
     {
-        require(_members[member].weight == NO_WEIGHT, "weight already set");
+        require(
+            onceOnly && _members[member].weight == NO_WEIGHT,
+            "weight already set"
+        );
 
         _members[member].weight = weight;
 
@@ -226,8 +229,8 @@ contract LaborRegister is Constants, WeeksList
     * @dev Allows project lead to setup a new limit on maximum weekly labor time
     * @param maxTime uint16 maximum weekly labor time in Time Units
     */
-    function _setMemberTimePerWeek(address member, uint16 maxTime)
-    internal memberExists(member)
+    function _setMemberTimePerWeek(address member, uint16 maxTime) internal
+    memberExists(member)
     {
         require(maxTime != 0, "invalid maxTimePerWeek");
         _members[member].maxTimeWeekly = maxTime;
