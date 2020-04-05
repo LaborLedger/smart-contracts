@@ -139,6 +139,10 @@ LaborRegister
         );
     }
 
+    function getMemberNetLabor(address member) external view returns(uint32) {
+        return _getMemberNetLabor(member);
+    }
+
     /**
     * @dev Returns the share of a member in total labor (of all members)
     * @param member Address of the member
