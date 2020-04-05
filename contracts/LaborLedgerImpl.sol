@@ -149,7 +149,7 @@ LaborRegister
     * @return uint32 share in ShareUnits
     */
     function getMemberLaborShare(address member) external view
-    returns(uint64 share)
+    returns(uint32 share)
     {
         uint32 projectNetLabor = _project.labor.sub(_project.settledLabor);
         if (projectNetLabor == 0) return 0;
@@ -157,7 +157,7 @@ LaborRegister
         uint32 netLabor = _getMemberNetLabor(member);
         if (netLabor == 0) return 0;
 
-        share = uint64(HUNDRED_PERCENT) * netLabor / projectNetLabor;
+        share = HUNDRED_PERCENT.mul(netLabor).div(projectNetLabor);
     }
 
     function setMemberStatus(address member, Status status) external

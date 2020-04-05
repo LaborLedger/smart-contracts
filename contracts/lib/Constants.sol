@@ -17,6 +17,7 @@ contract Constants {
     uint32 constant MANAGER_EQUITY = 900000;
     uint32 constant INVESTOR_EQUITY = 0;
     uint32 constant HUNDRED_PERCENT = 1000000;
+    uint256 constant HUNDRED_PERCENT256 = 1000000;
 
     // ERC-165 Selectors and interface IDs
 

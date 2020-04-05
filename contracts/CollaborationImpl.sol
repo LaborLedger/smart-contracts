@@ -7,6 +7,7 @@ import "./lib/interface/IErc165Compatible.sol";
 import "./lib/interface/ICollaboration.sol";
 import "./lib/Invites.sol";
 import "./LaborLedgerProxy.sol";
+import "./lib/SafeMath32.sol";
 
 contract CollaborationImpl is
     Initializable,
@@ -17,6 +18,7 @@ contract CollaborationImpl is
     CollaborationRoles,
     Invites
 {
+    using SafeMath32 for uint32;
 
     struct Collaboration {
         bytes32 uid;
@@ -102,6 +104,15 @@ contract CollaborationImpl is
             _collab.managerEquity,
             _collab.investorEquity
         );
+    }
+
+    function getMemberLaborEquity(address member) external view returns(uint32 equity) {
+        if (_collab.laborEquity != 0) {
+            uint256 laborShare = uint256(ILaborLedger(_collab.laborLedger).getMemberLaborShare(member));
+            if (laborShare != 0) {
+                equity = uint32(uint256(_collab.laborEquity) * laborShare / HUNDRED_PERCENT256);
+            }
+        }
     }
 
     /**

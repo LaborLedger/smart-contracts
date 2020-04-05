@@ -60,4 +60,13 @@ library SafeMath32 {
 
         return c;
     }
+
+    function div(uint32 a, uint32 b) internal pure returns (uint32) {
+        // Solidity only automatically asserts when dividing by 0
+        require(b > 0, "SafeMath32: division by zero");
+        uint32 c = a / b;
+        // assert(a == b * c + a % b); // There is no case in which this doesn't hold
+
+        return c;
+    }
 }

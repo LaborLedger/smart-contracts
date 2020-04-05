@@ -29,7 +29,7 @@ interface ILaborLedger {
      * @return The share of net Labor Units of a member in total net Labor Units of all members
      * (the share is expressed in Share Units)
      */
-    function getMemberLaborShare(address member) external view returns(uint64);
+    function getMemberLaborShare(address member) external view returns(uint32);
 
     /**
      * @dev Book (register) settlement of Labor Units of a member

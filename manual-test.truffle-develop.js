@@ -50,10 +50,11 @@ async function runTest(web3, artifacts, cb) {
     let collab = new web3.eth.Contract(CollaborationImpl.abi, collabProxy.address);
     let ldgrAddr = await collab.methods.getLaborLedger().call();
     let ledger = new web3.eth.Contract(LaborLedgerImpl.abi, ldgrAddr);
+    expect(web3.utils.isAddress(ledger.options.address), `laborLedger (proxy) ${ledger.options.address}`);
 
     expect(
         await compareStrings(()=>web3.eth.getStorageAt(collabProxy.address, '0x360894a13ba1a3210667c828492db98dca3e2076cc3735a920a3ca505d382bbc'), collabImpl.address),
-        "collabProxy.address");
+        `collabProxy.address ${collabProxy.address}`);
     expect(
         await compareStrings(()=>web3.eth.getStorageAt(collabProxy.address, '0xb53127684a568b3173ae13b9f8a6016e243e63b6e8ee1178d6a717850b5d6103'), proxyAdmin.address),
         "getStorageAt adminslot");
@@ -77,7 +78,12 @@ async function runTest(web3, artifacts, cb) {
 
     await shouldRevert(()=>collab.methods.setEquity('600000','250000','150000').call({from:quorum}), 'management equity cant increase');
     await shouldRevert(()=>collab.methods.setEquity('250000','150000','400000').call({from:quorum}), 'sum must be exactly 1000000');
-    await collab.methods.setEquity('250000','150000','600000').send({from:quorum})
+    await collab.methods.setEquity('250000','150000','600000').send({from:quorum});
+
+    let pools = await collab.methods.getEquity().call();
+    expect(pools.laborEquityPool === '600000', "laborEquityPool");
+    expect(pools.managerEquityPool === '250000', "managerEquityPool");
+    expect(pools.investorEquityPool === '150000', "investorEquityPool");
 
     await shouldRevert(()=>collab.methods.newInvite(web3.utils.keccak256('AudaC'), web3.utils.fromAscii('one')).call(), 'caller does not have the Inviter role');
 
@@ -137,6 +143,9 @@ async function runTest(web3, artifacts, cb) {
 
     expect(await ledger.methods.getMemberLaborShare(member2).call() === '600000', "getMemberLaborShare(member2)");
     expect(await ledger.methods.getMemberLaborShare(member3).call() === '400000', "getMemberLaborShare(member3)");
+
+    expect(await collab.methods.getMemberLaborEquity(member2).call() === '360000', "getMemberLaborEquity(member2)");
+    expect(await collab.methods.getMemberLaborEquity(member3).call() === '240000', "getMemberLaborEquity(member3)");
 
     expect(true, '*** END');
 
