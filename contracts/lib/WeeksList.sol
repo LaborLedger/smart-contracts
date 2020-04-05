@@ -48,10 +48,10 @@ contract WeeksList is Weeks {
     {
         require(week >= startWeek, "invalid week (too old)");
 
-        require(slidingWeek >= week, "invalid week (too recent)");
+        require(slidingWeek >= week, "invalid week (not yet open)");
 
         if (!revertClosedAndDuplicated) {
-            require(slidingWeek - week <= 5, "invalid week (out of range)");
+            require(slidingWeek - week <= 5, "invalid week (closed)");
         }
 
         (uint16 mostRecent, uint8 flags) = decodeWeeks(weeksList);

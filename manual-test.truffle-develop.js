@@ -1,245 +1,168 @@
-/* global artifacts, web3 */
+// truffle exec manual-test.truffle-develop.js --network truffle
+/* global web3, artifacts */
 
-/* To run
-with newly created 'truffle develop' network
-$ truffle exec manual-test.truffle-develop.js --network truffle --compile
-*/
-
-/* Manual commands to debug
-let collaboration = await Collaboration.new()
-let implementation = await LaborLedgerImplementation.new()
-let packUnpack = await MockPackUnpack.new()
-let initParams = await packUnpack.pack(collaboration.address, 0, 2558, 400000, 300000, [1,2,3,4])
-await implementation.init(initParams)
-
-let inst = await LaborLedgerCaller.new(implementation.address, collaboration.address, 0, 2558, 400000, 300000, [1,2,3,4])
-(await inst.getPastEvents({fromBlock:0, toBlock:1000})).map(e=>`${e.event}: ${e.raw.data}`)
-
-let co = new web3.eth.Contract(implementation.abi, inst.address)
-(await co.getPastEvents({fromBlock:0, toBlock:1000})).map(e=>`${JSON.stringify(e,null,2)}`)
-
-*/
-
-const {advanceBlock, advanceTimeAndBlock} = require('./scripts/truffle-test-helper')(web3);
-const unixTimeNow = Number.parseInt(`${Date.now() / 1000}`);
-const weekNow = Math.floor((unixTimeNow - 345600) / (7 * 24 * 3600)) + 1;
-console.log(`weekNow: ${weekNow}`);
-
-module.exports = async function(callback) {
-
-    const LaborLedgerImplementation = artifacts.require("LaborLedgerImplementation");
-    const LaborLedgerCaller = artifacts.require("LaborLedgerCaller");
-    const Collaboration = artifacts.require("Collaboration");
-
-    const [
-        defaultAccount,
-        projectLeadAddress,
-        memberAddress,
-        memberAddress2,
-        memberAddress3,
-        // nobody
-    ] = await web3.eth.personal.getAccounts();
-    const zeroAddress = "0x0000000000000000000000000000000000000000";
-    console.log('>>> defaultAccount ', defaultAccount);
-    console.log('>>> projectLead ', projectLeadAddress);
-    console.log('>>> member ', memberAddress);
-    console.log('>>> member2 ', memberAddress2);
-    console.log('>>> user3 ', memberAddress3);
-
-    const invitation = web3.utils.fromAscii('the rest we test');
-    const startWeek = 1;
-    const managerEquity = 200000;
-    const investorEquity = 100000;
-    const weights = [1,2,3,4];
-
-    async function main() {
-        while ((await web3.eth.getBlockNumber()) < 2) {
-            await advanceBlock();
-        }
-
-        console.log('>>> started at block ', await web3.eth.getBlockNumber());
-
-        let receipt, memberStatus;
-
-        console.log('>>>> Collaboration.new');
-        const collaboration = await Collaboration.new();
-        console.log('    contract address:', collaboration.address);
-        receipt = await web3.eth.getTransactionReceipt(collaboration.transactionHash);
-        console.log(`>> receipt = ${JSON.stringify(receipt, null, 2)}`);
-
-        console.log('>>>> LaborLedgerImplementation.new');
-        const implementation = await LaborLedgerImplementation.new();
-        receipt = await web3.eth.getTransactionReceipt(implementation.transactionHash);
-        console.log(`>> receipt = ${JSON.stringify(receipt, null, 2)}`);
-
-        console.log('>>>> LaborLedgerCaller.new');
-        const caller = await LaborLedgerCaller.new(implementation.address, collaboration.address, projectLeadAddress, startWeek, managerEquity, investorEquity, weights);
-        receipt = await web3.eth.getTransactionReceipt(caller.transactionHash);
-        console.log(`>> receipt = ${JSON.stringify(receipt, null, 2)}`);
-
-        console.log('>>>> LaborLedgerCaller.new (2)');
-        const caller2 = await LaborLedgerCaller.new(implementation.address, collaboration.address, zeroAddress, startWeek+1, managerEquity+1, investorEquity+1, weights);
-        receipt = await web3.eth.getTransactionReceipt(caller.transactionHash);
-        console.log(`>> receipt = ${JSON.stringify(receipt, null, 2)}`);
-
-        const instance1 = new web3.eth.Contract(LaborLedgerImplementation.abi, caller.address);
-        console.log(`>> instance1  = ${instance1.options.address}`);
-
-        const instance2 = new web3.eth.Contract(LaborLedgerImplementation.abi, caller2.address);
-        console.log(`>> instance2 = ${instance2.options.address}`);
-
-        const {
-            // acceptWeight,
-            addProjectLead,
-            getMemberData,
-            getMemberShare,
-            getMemberStatus,
-            join,
-            init,
-            setMemberStatus,
-            setMemberWeight,
-            submitTime,
-            totalTime,
-            totalWeightedTime
-        } = instance1.methods;
-
-        const {
-            init: init2,
-            addProjectLead: addProjectLead2,
-        } = instance2.methods;
-
-        // console.log('>>>> init');
-        // receipt = await init(nobody, startWeek).send({from: defaultAccount, gas: 300000});
-        // console.log(`>> receipt = ${JSON.stringify(receipt, null, 2)}`);
-
-        console.log('>>>> init');
-        const initParams = collaboration.address + web3.utils.padLeft(startWeek.toString(16), 24).replace('0x', '');
-        if (initParams.length !== 66) throw new Error('invalid initParams');
-        await init(initParams).send({from: defaultAccount}).then(fall).catch(logErr);
-
-        console.log('>>>> init2');
-        const initParams2 = collaboration.address + web3.utils.padLeft((startWeek+1).toString(16), 24).replace('0x', '');
-        if (initParams2.length !== 66) throw new Error('invalid initParams');
-        await init2(initParams2).send({from: defaultAccount}).then(fall).catch(logErr);
-
-        console.log('>>>> addProjectLead (already is lead');
-        await addProjectLead(projectLeadAddress).send({from: defaultAccount}).catch(logErr);
-
-        console.log('>>>> addProjectLead(2)');
-        receipt = await addProjectLead2(memberAddress3).send({from: defaultAccount});
-        console.log(`>> receipt = ${JSON.stringify(receipt, null, 2)}`);
-
-        console.log('>>>> addProjectLead(2) second time');
-        await addProjectLead2(memberAddress3).send({from: defaultAccount}).then(fall).catch(logErr);
-
-        console.log('>>>> join member');
-        receipt = await join(invitation).send({from: memberAddress});
-        console.log(`>> receipt = ${JSON.stringify(receipt, null, 2)}`);
-        memberStatus = await getMemberStatus(memberAddress).call();
-        console.log(`>> memberStatus = ${memberStatus}`);
-
-        console.log('>>>> set weight member');
-        receipt = await setMemberWeight(memberAddress, 1).send({from: projectLeadAddress});
-        console.log(`>> receipt = ${JSON.stringify(receipt, null, 2)}`);
-
-        console.log('>>>> join member3');
-        receipt = await join(invitation).send({from: memberAddress3});
-        console.log(`>> receipt = ${JSON.stringify(receipt, null, 2)}`);
-
-        advanceTimeAndBlock(7 * 24 * 3600);
-
-        console.log('>>>> submitTime member3');
-        receipt = await submitTime(weekNow, [0, 0, 0, 5, 5, 0, 0]).send({from: memberAddress3, gas:300000});
-        console.log(`>> receipt = ${JSON.stringify(receipt, null, 2)}`);
-
-        console.log('>>>> set member3 status hold');
-        receipt = await setMemberStatus(memberAddress3, 2).send({from: projectLeadAddress});
-        console.log(`>> receipt = ${JSON.stringify(receipt, null, 2)}`);
-
-        // console.log('>>>> set user 3 status offboard');
-        // receipt = await setMemberStatus(memberAddress3, 4).send({from: projectLeadAddress});
-        // console.log(`>> receipt = ${JSON.stringify(receipt, null, 2)}`);
-
-        console.log('>>>> join member2');
-        receipt = await join(invitation).send({from: memberAddress2});
-        console.log(`>> receipt = ${JSON.stringify(receipt, null, 2)}`);
-
-        console.log('>>>> set invalid statuses to member2');
-        await setMemberStatus(memberAddress2, 0).send({from: projectLeadAddress}).then(fall).catch(logErr);
-        await setMemberStatus(memberAddress2, 3).send({from: projectLeadAddress}).then(fall).catch(logErr);
-
-        console.log('>>>> set weight member2');
-        receipt = await setMemberWeight(memberAddress2, 2).send({from: projectLeadAddress});
-        console.log(`>> receipt = ${JSON.stringify(receipt, null, 2)}`);
-
-        console.log('>>>> submitTime member');
-        receipt = await submitTime(weekNow, [4, 4, 4, 4, 3, 1, 0]).send({from: memberAddress, gas:300000});
-        console.log(`>> receipt = ${JSON.stringify(receipt, null, 2)}`);
-
-        advanceTimeAndBlock(7 * 24 * 3600);
-
-        console.log('>>>> submitTime member');
-        receipt = await submitTime(weekNow + 1, [34, 44, 44, 44, 36, 12, 0]).send({from: memberAddress, gas:300000});
-        console.log(`>> receipt = ${JSON.stringify(receipt, null, 2)}`);
-
-        // console.log('>>>> accept weight by member');
-        // receipt = await acceptWeight(32).send({from: memberAddress, gas:300000});
-        // console.log(`>> receipt = ${JSON.stringify(receipt, null, 2)}`);
-
-        // console.log('>>>> accept weight by member 2');
-        // receipt = await acceptWeight(64).send({from: memberAddress2, gas:300000});
-        // console.log(`>> receipt = ${JSON.stringify(receipt, null, 2)}`);
-
-        console.log('>>>> submitTime member2');
-        receipt = await submitTime(weekNow + 1, [80, 80, 80, 80, 60, 0, 0]).send({from: memberAddress2, gas:300000});
-        console.log(`>> receipt = ${JSON.stringify(receipt, null, 2)}`);
-
-        console.log('>>>> submitTime member3 being onhold');
-        await submitTime(weekNow + 1, [0, 0, 0, 5, 5, 0, 0]).send({from: memberAddress3, gas:300000}).then(fall).catch(logErr);
-
-        let memberData = await getMemberData(memberAddress).call();
-        console.log(`>> member  Data = ${JSON.stringify(memberData, null, 2)}`);
-
-        memberData = await getMemberData(memberAddress2).call();
-        console.log(`>> member2 Data = ${JSON.stringify(memberData, null, 2)}`);
-
-        memberData = await getMemberData(memberAddress3).call();
-        console.log(`>> member3 Data = ${JSON.stringify(memberData, null, 2)}`);
-
-        let memberShare = await getMemberShare(memberAddress).call();
-        console.log(`>> member  Share = ${memberShare.toString()}`);
-
-        memberShare = await getMemberShare(memberAddress2).call();
-        console.log(`>> member2 Share = ${memberShare.toString()}`);
-
-        memberShare = await getMemberShare(memberAddress3).call();
-        console.log(`>> member3 Share = ${memberShare.toString()}`);
-
-        let value = await totalTime().call();
-        console.log(`>> totalTime = ${value.toString()}`);
-
-        value = await totalWeightedTime().call();
-        console.log(`>> totalWeightedTime = ${value.toString()}`);
-
-        console.log('>>> done');
-    }
-
-    let falls;
-    const cb = (...args) => {
-        if (falls) console.log(`!!!! It has to fall ${falls} time`);
-        console.log('>>>> end');
-        callback(...args);
-    };
-    function fall() { falls++; throw new Error('Must fall'); }
-    function logErr(e) { console.log(e.message); }
-
+module.exports = (cb) => {
     try {
-        main()
-            .catch(console.error)
-            .finally(cb);
-    } catch (e) {
-        console.log('>>>> catch');
+        runTest(web3, artifacts, cb).then(() => {
+            console.log('SUCCESS');
+            if (typeof cb === 'function') return cb();
+        });
+    } catch(e) {
         console.error(e);
-        cb();
+        if (typeof cb === 'function') return cb(e);
     }
 };
+
+async function runTest(web3, artifacts, cb) {
+
+    const {advanceBlock, advanceTimeAndBlock} = require('./scripts/truffle-test-helper')(web3);
+    const unixTimeNow = Number.parseInt(`${Date.now() / 1000}`);
+    const weekNow = Math.floor((unixTimeNow - 345600) / (7 * 24 * 3600)) + 1;
+    console.log(`weekNow: ${weekNow}`);
+
+    const accounts = await web3.eth.personal.getAccounts();
+    let [ deployer, member1, member2, member3, user4, quorum, inviter, lead, arbiter, operator ] = accounts;
+    let defaultOpts = {from: deployer, gas: 5000000};
+    console.log('defaultOpts = ', defaultOpts);
+
+    while ((await web3.eth.getBlockNumber()) < 2) {
+        await advanceBlock();
+    }
+    console.log('started at block ', await web3.eth.getBlockNumber());
+
+    const CollaborationProxy = artifacts.require("CollaborationProxy") || fall("artifacts CollaborationProxy");
+    const CollaborationImpl = artifacts.require("CollaborationImpl") || fall("artifacts CollaborationImpl");
+    const LaborLedgerImpl = artifacts.require("LaborLedgerImpl") || fall("artifacts LaborLedgerImpl");
+    const OzProxyAdmin = artifacts.require("OzProxyAdmin") || fall("artifacts OzProxyAdmin");
+
+    let proxyAdmin = await OzProxyAdmin.new(defaultOpts) || fall("OzProxyAdmin.new");
+    expect(web3.utils.isAddress(proxyAdmin.address), `OzProxyAdmin ${proxyAdmin.address}`);
+
+    let collabImpl = (await CollaborationImpl.new(defaultOpts)) || fall("CollaborationImpl.new");
+    expect(web3.utils.isAddress(collabImpl.address), `CollaborationImpl ${collabImpl.address}`);
+
+    let ledgerImpl = await LaborLedgerImpl.new(defaultOpts);
+    expect(web3.utils.isAddress(ledgerImpl.address), `LaborLedgerImpl ${ledgerImpl.address}`);
+
+    let collabProxy = await CollaborationProxy.new(collabImpl.address, proxyAdmin.address, '0x33ff', quorum, inviter, 300000, 200000, 500000, ledgerImpl.address, lead, arbiter, operator, 2500, 0x04030201, defaultOpts);
+    expect(web3.utils.isAddress(collabProxy.address), `CollaborationProxy ${collabProxy.address}`);
+
+    let collab = new web3.eth.Contract(CollaborationImpl.abi, collabProxy.address);
+    let ldgrAddr = await collab.methods.getLaborLedger().call();
+    let ledger = new web3.eth.Contract(LaborLedgerImpl.abi, ldgrAddr);
+
+    expect(
+        await compareStrings(()=>web3.eth.getStorageAt(collabProxy.address, '0x360894a13ba1a3210667c828492db98dca3e2076cc3735a920a3ca505d382bbc'), collabImpl.address),
+        "collabProxy.address");
+    expect(
+        await compareStrings(()=>web3.eth.getStorageAt(collabProxy.address, '0xb53127684a568b3173ae13b9f8a6016e243e63b6e8ee1178d6a717850b5d6103'), proxyAdmin.address),
+        "getStorageAt adminslot");
+    expect(
+        await compareStrings(()=>proxyAdmin.getProxyAdmin(ldgrAddr), proxyAdmin.address),
+        "proxyAdmin.getProxyAdmin 1");
+    expect(
+        await compareStrings(()=>proxyAdmin.getProxyAdmin(collabProxy.address), proxyAdmin.address),
+        "proxyAdmin.getProxyAdmin 2");
+    expect(
+        await compareStrings(()=>ledger.methods.getCollaboration().call(), collab.options.address),
+        "getCollaboration");
+
+    expect(
+        await compareStrings(()=>collab.methods.getUid().call(), web3.utils.padRight(0x33ff, 64)),
+        "getUid");
+
+    await collab.methods.getEquity().call();
+    await shouldRevert(()=>collab.methods.setEquity('600000','250000','150000').call(), 'caller does not have the Quorum role');
+    expect(await collab.methods.isQuorum(quorum).call(), "isQuorum");
+
+    await shouldRevert(()=>collab.methods.setEquity('600000','250000','150000').call({from:quorum}), 'management equity cant increase');
+    await shouldRevert(()=>collab.methods.setEquity('250000','150000','400000').call({from:quorum}), 'sum must be exactly 1000000');
+    await collab.methods.setEquity('250000','150000','600000').send({from:quorum})
+
+    await shouldRevert(()=>collab.methods.newInvite(web3.utils.keccak256('AudaC'), web3.utils.fromAscii('one')).call(), 'caller does not have the Inviter role');
+
+    let thisWeek = await ledger.methods.getCurrentWeek().call();
+    let invHash = web3.utils.keccak256('AudaC');
+    let invData3 = await ledger.methods.encodeInviteData(1,2,1*thisWeek-4,500,33).call();
+    await shouldRevert(()=>collab.methods.newInvite(invHash, invData3).send({from:member3}), ' caller does not have the Inviter role');
+
+    expect(await collab.methods.isInviter(inviter).call(), "isInviter");
+    await collab.methods.newInvite(invHash, invData3).send({from:inviter});
+    expect(await collab.methods.isInvite(invHash).call(), "isInvite");
+
+    await ledger.methods.join(web3.utils.fromAscii('AudaC'),1,2,1*thisWeek-4,500,33).send({from:member3});
+
+    await ledger.methods.submitTime(1*thisWeek-2,167,'0x45').send({from:member3});
+
+    await shouldRevert(()=>ledger.methods.submitTime(1*thisWeek-2,233,'0x44').send({from:member3}), 'duplicated submission');
+    await shouldRevert(()=>ledger.methods.submitTime(1*thisWeek-1,1233,'0x45').send({from:member3}), 'time exceeds week limit');
+    await shouldRevert(()=>ledger.methods.submitTime(1*thisWeek-6,50,'0x46').send({from:member3}), 'invalid week (too old)');
+    await shouldRevert(()=>ledger.methods.submitTime(1*thisWeek,50,'0x46').send({from:member3}), 'invalid week (not yet open)');
+    await shouldRevert(()=>ledger.methods.submitTime(1*thisWeek-2,1233,'0x45').send({from:member2}), 'member does not exists');
+
+    await ledger.methods.submitTime(1*thisWeek-1,233,'0x44').send({from:member3});
+
+    let membData = await ledger.methods.getMemberData(member3).call();
+    let decodedWeeks = await ledger.methods.decodeWeeks(membData.recentWeeks).call();
+    expect(decodedWeeks.mostRecent*1 === 1*thisWeek-1, "decodedWeeks.mostRecent");
+    expect(decodedWeeks.flags*1 === 1, "decodedWeeks.flags");
+    expect(await ledger.methods.getMemberTime(member3).call() === '400', "getMemberTime");
+    let membLabor = await ledger.methods.getMemberLabor(member3).call();
+    expect(membLabor.netLabor*1 === 1200, "netLabor");
+
+    let invData2 = await ledger.methods.encodeInviteData(1,1,1*thisWeek-3,500,32).call();
+    await collab.methods.newInvite(invHash, invData2).send({from:inviter});
+    shouldRevert(()=>ledger.methods.join(web3.utils.fromAscii('AudaC'),1,1,1*thisWeek-3,500,31).send({from:member2}), 'mismatched invite data');
+    shouldRevert(()=>ledger.methods.join(member3, web3.utils.fromAscii('AudaC'),1,1,1*thisWeek-3,500,32).send({from:operator}), 'member already exists');
+
+    await ledger.methods.join(member2, web3.utils.fromAscii('AudaC'),1,1,1*thisWeek-3,500,32).send({from:operator});
+    await ledger.methods.submitTime(1*thisWeek-1,333,'0x44').send({from:member2});
+    await ledger.methods.submitTime(1*thisWeek-3,333,'0x44').send({from:member2});
+    await ledger.methods.submitTime(1*thisWeek-2,333,'0x44').send({from:member2});
+    await ledger.methods.updateTime(arbiter, member2, 1*thisWeek-3, -99, '0x77').send({from: operator});
+
+    membData = await ledger.methods.getMemberData(member2).call();
+    decodedWeeks = await ledger.methods.decodeWeeks(membData.recentWeeks).call();
+    expect(decodedWeeks.mostRecent*1 === 1*thisWeek-1, "decodedWeeks.mostRecent member2");
+    expect(decodedWeeks.flags*1 === 3, "decodedWeeks.flags member2");
+
+    expect(await ledger.methods.getMemberTime(member2).call() === '900', "getMemberTime(member2)");
+    expect(await ledger.methods.getMemberNetLabor(member2).call() === '1800', "getMemberNetLabor(member2)");
+
+    expect(await ledger.methods.getTotalTime().call() === '1300', "getTotalTime()");
+    let totalLabor = await ledger.methods.getTotalLabor().call();
+    expect(totalLabor.labor*1 === 3000, "totalLabor.labor");
+    expect(totalLabor.netLabor*1 === 3000, "totalLabor.netLabor");
+    expect(totalLabor.settledLabor*1 === 0, "totalLabor.settledLabor");
+
+    expect(await ledger.methods.getMemberLaborShare(member2).call() === '600000', "getMemberLaborShare(member2)");
+    expect(await ledger.methods.getMemberLaborShare(member3).call() === '400000', "getMemberLaborShare(member3)");
+
+    expect(true, '*** END');
+
+    function fall(msg) {
+        console.error(msg);
+        return cb(new Error(msg));
+    }
+
+    function expect(success, msg) {
+        if (success) {
+            console.log(`PASSED: ${msg}`);
+        } else {
+            fall(`FAILED: ${msg}`);
+        }
+    }
+
+    async function shouldRevert(fn, msg) {
+        try {
+            await fn().then(()=> fall('it MUST have been reverted !!!'));
+        } catch(_) {
+            console.log(`PASSED: (reverted) ${msg}`);
+        }
+    }
+
+    async function compareStrings(fn, expected, caseInsensitive = true) {
+        let val = await fn().then(a => caseInsensitive ? a.toLowerCase() : a);
+        return val === (caseInsensitive ? expected.toLowerCase() : expected);
+    }
+}

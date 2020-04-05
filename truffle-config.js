@@ -19,6 +19,7 @@ module.exports = {
       host: "127.0.0.1",
       port: 9545,
       network_id: "*",
+      gas: 5000000,
     },
 
     // for Ganache (App or Docker) + 'truffle console --network development'

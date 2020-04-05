@@ -386,7 +386,7 @@ LaborRegister
     {
         int32 labor = _submitMemberTime(member, week, time, uid, revertClosedAndDuplicated);
         _project.time = _project.time.addSigned(time);
-        _project.labor = _project.time.addSigned(labor);
+        _project.labor = _project.labor.addSigned(labor);
     }
 
     function _validateInvite(

@@ -13,6 +13,7 @@ module.exports = async function(deployer, network, accounts) {
         return;
     }
 
+    /*
     const Prototype = artifacts.require("Prototype");
 
     // default values applied for all params except for the 'term'
@@ -21,6 +22,7 @@ module.exports = async function(deployer, network, accounts) {
         console.log("Prototype contract successfully deployed");
         console.log(`..at adreess:        ${Prototype.address}`);
     });
+    */
 
     console.warn("2_deploy_contract.js executed");
 };

@@ -255,7 +255,7 @@ contract LaborRegister is Constants, WeeksList
             time > 0
             ? (time <= _members[member].maxTimeWeekly)
             : (-time <= _members[member].maxTimeWeekly),
-            "time exceed week limit"
+            "time exceeds week limit"
         );
 
         _members[member].recentWeeks = _getUpdatedWeeksList(
@@ -270,7 +270,7 @@ contract LaborRegister is Constants, WeeksList
 
         if (_members[member].weight != NO_WEIGHT) {
             labor = time * _members[member].weight; // too small to overflow
-            _members[member].labor = _members[member].time.addSigned(labor);
+            _members[member].labor = _members[member].labor.addSigned(labor);
         }
 
         emit TimeSubmitted(member, week, labor, time, uid);
