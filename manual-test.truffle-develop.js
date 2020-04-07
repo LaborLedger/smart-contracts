@@ -41,7 +41,7 @@ async function runTest(web3, artifacts, cb) {
     let collabImpl = (await CollaborationImpl.new(defaultOpts)) || fall("CollaborationImpl.new");
     expect(web3.utils.isAddress(collabImpl.address), `CollaborationImpl ${collabImpl.address}`);
 
-    let ledgerImpl = await LaborLedgerImpl.new(defaultOpts);
+    let ledgerImpl = await LaborLedgerImpl.new(defaultOpts) || fall("LaborLedgerImpl.new");
     expect(web3.utils.isAddress(ledgerImpl.address), `LaborLedgerImpl ${ledgerImpl.address}`);
 
     let collabProxy = await CollaborationProxy.new(collabImpl.address, proxyAdmin.address, '0x33ff', quorum, inviter, 300000, 200000, 500000, ledgerImpl.address, lead, arbiter, operator, 2500, 0x04030201, defaultOpts);
@@ -149,10 +149,7 @@ async function runTest(web3, artifacts, cb) {
 
     expect(true, '*** END');
 
-    function fall(msg) {
-        console.error(msg);
-        return cb(new Error(msg));
-    }
+    function fall(msg) {console.error(msg); return cb ? cb(new Error(msg)) : null; }
 
     function expect(success, msg) {
         if (success) {
