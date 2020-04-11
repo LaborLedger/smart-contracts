@@ -320,6 +320,19 @@ LaborRegister
         return LABORLEDGER_IFACE;
     }
 
+    function offboardMember(address member) external
+    {
+        requireQuorum(_msgSender());
+        _offboardMember(member);
+    }
+
+    function offboardMember(address quorum, address member) external
+    {
+        requireQuorum(quorum);
+        isOperatorFor(_msgSender(), quorum);
+        _offboardMember(member);
+    }
+
     function encodeInviteData (
         uint status, uint weight, uint startWeek, uint maxWeeklyTime, uint terms
     ) public pure returns(bytes32)

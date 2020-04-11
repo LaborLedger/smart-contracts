@@ -16,7 +16,8 @@ contract LaborRegister is Constants, WeeksList
     enum Status {
         UNKNOWN,    // 0
         ACTIVE,     // 1
-        ONHOLD      // 2
+        ONHOLD ,    // 2
+        OFFBOARDED  // 3
     }
 
     struct Member {
@@ -195,9 +196,20 @@ contract LaborRegister is Constants, WeeksList
     function _setMemberStatus(address member, Status status) internal
     memberExists(member)
     {
-        require(status != Status.UNKNOWN, "invalid status");
+        require(
+            status != Status.UNKNOWN && status != Status.OFFBOARDED,
+            "invalid status"
+        );
         _members[member].status = status;
         emit MemberStatusUpdated(member, status);
+    }
+
+    function _offboardMember(address member) internal
+    memberExists(member)
+    {
+        require(_members[member].status != Status.OFFBOARDED, "already off-boarded");
+        _members[member].status = Status.OFFBOARDED;
+        emit MemberStatusUpdated(member, Status.OFFBOARDED);
     }
 
     /**
@@ -210,6 +222,8 @@ contract LaborRegister is Constants, WeeksList
     memberExists(member)
     returns (uint32 labor)
     {
+        require(_members[member].status != Status.OFFBOARDED, "member off-boarded");
+
         require(
             onceOnly && _members[member].weight == NO_WEIGHT,
             "weight already set"
@@ -232,6 +246,7 @@ contract LaborRegister is Constants, WeeksList
     function _setMemberTimePerWeek(address member, uint16 maxTime) internal
     memberExists(member)
     {
+        require(_members[member].status != Status.OFFBOARDED, "member off-boarded");
         require(maxTime != 0, "invalid maxTimePerWeek");
         _members[member].maxTimeWeekly = maxTime;
         emit MemberTimePerWeekUpdated(member, maxTime);
@@ -247,8 +262,8 @@ contract LaborRegister is Constants, WeeksList
     ) internal memberExists(member) returns (int32 labor)
     {
         require(
-            _members[member].status != Status.ONHOLD,
-            "Member is on hold!!"
+            _members[member].status == Status.ACTIVE,
+            "Member is not ACTIVE!!"
         );
 
         require(
@@ -278,7 +293,11 @@ contract LaborRegister is Constants, WeeksList
 
     function _settleLabor(address member, uint32 labor, bytes32 uid) internal
     {
-        _members[member].settledLabor = _members[member].settledLabor.sub(labor);
+        _members[member].settledLabor = _members[member].settledLabor.add(labor);
+        require(
+            _members[member].labor >= _members[member].settledLabor,
+            "not enough labor units"
+        );
         emit LaborSettled(member, _members[member].settledLabor, uid);
     }
 }
