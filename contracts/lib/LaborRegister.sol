@@ -204,9 +204,9 @@ contract LaborRegister is Constants, WeeksList
     * @dev Set member weight. Can only be done once. Only project lead can call
     * @param member User whose weight has to be set
     * @param weight Weight of the member (factor to convert time into labor)
-    * @return labor Labor units accounted for `time` of the member accumulated so far
+    * @return labor Labor Units of the member accumulated so far
     */
-    function _setMemberWeight(address member, uint8 weight, bool onceOnly) internal
+    function _updateMemberWeight(address member, uint8 weight, bool onceOnly) internal
     memberExists(member)
     returns (uint32 labor)
     {

@@ -89,16 +89,20 @@ async function runTest(web3, artifacts, cb) {
 
     let thisWeek = await ledger.methods.getCurrentWeek().call();
     let invHash = web3.utils.keccak256('AudaC');
-    let invData3 = await ledger.methods.encodeInviteData(1,2,1*thisWeek-4,500,33).call();
+    let invData3 = await ledger.methods.encodeInviteData(2,2,1*thisWeek-4,500,33).call();
     await shouldRevert(()=>collab.methods.newInvite(invHash, invData3).send({from:member3}), ' caller does not have the Inviter role');
 
     expect(await collab.methods.isInviter(inviter).call(), "isInviter");
     await collab.methods.newInvite(invHash, invData3).send({from:inviter});
     expect(await collab.methods.isInvite(invHash).call(), "isInvite");
 
-    await ledger.methods.join(web3.utils.fromAscii('AudaC'),1,2,1*thisWeek-4,500,33).send({from:member3});
+    await ledger.methods.join(web3.utils.fromAscii('AudaC'),2,2,1*thisWeek-4,500,33).send({from:member3});
 
+    await shouldRevert(()=>ledger.methods.submitTime(1*thisWeek-2,167,'0x45').send({from:member3}), 'member ONHOLD');
+
+    await ledger.methods.setMemberStatus(lead, member3, 1).send({from:operator});
     await ledger.methods.submitTime(1*thisWeek-2,167,'0x45').send({from:member3});
+    expect(await ledger.methods.getMemberTime(member3).call() === '167', "getMemberTime 167");
 
     await shouldRevert(()=>ledger.methods.submitTime(1*thisWeek-2,233,'0x44').send({from:member3}), 'duplicated submission');
     await shouldRevert(()=>ledger.methods.submitTime(1*thisWeek-1,1233,'0x45').send({from:member3}), 'time exceeds week limit');
@@ -114,14 +118,29 @@ async function runTest(web3, artifacts, cb) {
     expect(decodedWeeks.flags*1 === 1, "decodedWeeks.flags");
     expect(await ledger.methods.getMemberTime(member3).call() === '400', "getMemberTime");
     let membLabor = await ledger.methods.getMemberLabor(member3).call();
-    expect(membLabor.netLabor*1 === 1200, "netLabor");
+    expect(membLabor.netLabor*1 === 800, "netLabor");
 
-    let invData2 = await ledger.methods.encodeInviteData(1,1,1*thisWeek-3,500,32).call();
+    let invData1 = await ledger.methods.encodeInviteData(0,0,0,0,0).call();
+    await collab.methods.newInvite(invHash, invData1).send({from:inviter});
+    await ledger.methods.join(member1, web3.utils.fromAscii('AudaC'),0,0,0,0,0).send({from:operator});
+    membData = await ledger.methods.getMemberData(member1).call();
+    expect(membData.status*1 === 1, `member1.membData.status ${membData.status}`);
+    expect(membData.weight*1 === 0, `member1.membData.weight ${membData.weight}`);
+    expect(membData.startWeek*1 === thisWeek*1, `member1.membData.startWeek ${membData.startWeek}`);
+    expect(membData.recentWeeks * 1 === 0, `member1.membData.recentWeeks ${membData.recentWeeks}`);
+
+    await ledger.methods.setMemberWeight(lead, member1, 4).send({from:operator}).catch(console.error);
+    await ledger.methods.setMemberStatus(lead, member1, 2).send({from:operator});
+    membData = await ledger.methods.getMemberData(member1).call();
+    expect(membData.status*1 === 2, `member1.membData.status ${membData.status}`);
+    expect(membData.weight*1 === 4, `member1.membData.weight ${membData.weight}`);
+
+    let invData2 = await ledger.methods.encodeInviteData(1,3,1*thisWeek-3,500,32).call();
     await collab.methods.newInvite(invHash, invData2).send({from:inviter});
-    shouldRevert(()=>ledger.methods.join(web3.utils.fromAscii('AudaC'),1,1,1*thisWeek-3,500,31).send({from:member2}), 'mismatched invite data');
-    shouldRevert(()=>ledger.methods.join(member3, web3.utils.fromAscii('AudaC'),1,1,1*thisWeek-3,500,32).send({from:operator}), 'member already exists');
+    shouldRevert(()=>ledger.methods.join(web3.utils.fromAscii('AudaC'),1,3,1*thisWeek-3,500,31).send({from:member2}), 'mismatched invite data');
+    shouldRevert(()=>ledger.methods.join(member3, web3.utils.fromAscii('AudaC'),1,3,1*thisWeek-3,500,32).send({from:operator}), 'member already exists');
 
-    await ledger.methods.join(member2, web3.utils.fromAscii('AudaC'),1,1,1*thisWeek-3,500,32).send({from:operator});
+    await ledger.methods.join(member2, web3.utils.fromAscii('AudaC'),1,3,1*thisWeek-3,500,32).send({from:operator});
     await ledger.methods.submitTime(1*thisWeek-1,333,'0x44').send({from:member2});
     await ledger.methods.submitTime(1*thisWeek-3,333,'0x44').send({from:member2});
     await ledger.methods.submitTime(1*thisWeek-2,333,'0x44').send({from:member2});
@@ -133,19 +152,19 @@ async function runTest(web3, artifacts, cb) {
     expect(decodedWeeks.flags*1 === 3, "decodedWeeks.flags member2");
 
     expect(await ledger.methods.getMemberTime(member2).call() === '900', "getMemberTime(member2)");
-    expect(await ledger.methods.getMemberNetLabor(member2).call() === '1800', "getMemberNetLabor(member2)");
+    expect(await ledger.methods.getMemberNetLabor(member2).call() === '2700', "getMemberNetLabor(member2)");
 
     expect(await ledger.methods.getTotalTime().call() === '1300', "getTotalTime()");
     let totalLabor = await ledger.methods.getTotalLabor().call();
-    expect(totalLabor.labor*1 === 3000, "totalLabor.labor");
-    expect(totalLabor.netLabor*1 === 3000, "totalLabor.netLabor");
+    expect(totalLabor.labor*1 === 3500, "totalLabor.labor");
+    expect(totalLabor.netLabor*1 === 3500, "totalLabor.netLabor");
     expect(totalLabor.settledLabor*1 === 0, "totalLabor.settledLabor");
 
-    expect(await ledger.methods.getMemberLaborShare(member2).call() === '600000', "getMemberLaborShare(member2)");
-    expect(await ledger.methods.getMemberLaborShare(member3).call() === '400000', "getMemberLaborShare(member3)");
+    expect(await ledger.methods.getMemberLaborShare(member2).call() === '771428', "getMemberLaborShare(member2)");
+    expect(await ledger.methods.getMemberLaborShare(member3).call() === '228571', "getMemberLaborShare(member3)");
 
-    expect(await collab.methods.getMemberLaborEquity(member2).call() === '360000', "getMemberLaborEquity(member2)");
-    expect(await collab.methods.getMemberLaborEquity(member3).call() === '240000', "getMemberLaborEquity(member3)");
+    expect(await collab.methods.getMemberLaborEquity(member2).call() === '462856', "getMemberLaborEquity(member2)");
+    expect(await collab.methods.getMemberLaborEquity(member3).call() === '137142', "getMemberLaborEquity(member3)");
 
     expect(true, '*** END');
 

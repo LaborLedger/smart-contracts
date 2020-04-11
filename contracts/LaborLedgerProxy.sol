@@ -16,9 +16,7 @@ contract LaborLedgerProxy is AdminUpgradeabilityProxy {
      * @param projectLead Address of the project Lead (msg.sender by default)
      * @param projectArbiter Address of the project Arbiter (msg.sender by default)
      * @param startWeek Week Index of the project first week (default - current week)
-     * @param weights Array packed into Uint32 with "weight" factors
-     *   (to convert Time Units into Labor Units)
-     *   by default, for JUNIOR, STANDARD , SENIOR, ADVISER: [1,2,3,4]
+     * @param weights Allowed values for "weight" (default [1,2,3,4])
      */
     constructor (
         address implementation,
@@ -28,7 +26,7 @@ contract LaborLedgerProxy is AdminUpgradeabilityProxy {
         address projectArbiter,
         address defaultOperator,
         uint16 startWeek,
-        uint32 weights
+        uint32 weights  // packed uin8[4]
     )
         AdminUpgradeabilityProxy(
             implementation,

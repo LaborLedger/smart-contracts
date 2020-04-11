@@ -9,7 +9,7 @@ interface ILaborLedger {
      * (provide zero value(s) for any (all) other param(s) to set the default value(s))
      * @param projectLead (optional) Address of project lead
      * @param startWeek Week Index iof the Project first week (default - previous week)
-     * @param weights Factors to convert Time Units in Labor Units (4 uint8 packed into uint8[4])
+     * @param weights Allowed values for "weight" (factor to convert Time Units in Labor Units)
      */
     function initialize(
         address collaboration,
@@ -17,7 +17,7 @@ interface ILaborLedger {
         address projectArbiter,
         address defaultOperator,
         uint16 startWeek,
-        uint32 weights
+        uint32 weights // packed uint8[4]
     ) external;
 
     /**

@@ -29,7 +29,7 @@ LaborRegister
     * 1 Time Unit = 300 seconds
     *
     * @dev "Labor Units"
-    * "Labor Units" are the Time Units weighted with the "weight" factor for a member
+    * "Labor Units" are "Time Units" weighted with (multiply by) the "weight"
     *
     * @dev "Equity Units"
     * Equity submitted, stored and returned in Share Units
@@ -43,19 +43,10 @@ LaborRegister
 
     using SafeMath32 for uint32;
 
-    // Indexes for `weights`
-    enum WeightInd {
-        JUNIOR,     // 0
-        STANDARD,   // 1
-        SENIOR,     // 2
-        ADVISER     // 3
-    }
-
     struct Project {
         uint32 birthBlock;          // block the contract is created within
         uint16 startWeek;           // Week Index of the project first week
-        uint32 weights;             // Time Units to Labor Units conversion factors
-                                    // (packed uint8[4] for JUNIOR, STANDARD, SENIOR, ADVISER)
+        uint32 weights;             // Allowed values for the "weight" (packed uint8[4])
         uint32 time;                // total submitted hours in Time Units
         uint32 labor;               // total submitted hours in Labor Units
         uint32 settledLabor;        // Labor Units converted in tokens or paid (reserved)
@@ -78,7 +69,7 @@ LaborRegister
     * (provide zero value(s) for any (all) other param(s) to set the default value(s))
     * @param projectLead <address> (optional) address of project lead
     * @param startWeek <uint16> project first week as Week Index (default - previous week)
-    * @param weights <uint32> (packed uint8[4]) factors to convert Time Units in Labor Units
+    * @param weights - set of allowed values for the "weight"
     */
     function initialize(
         address collaboration,
@@ -86,7 +77,7 @@ LaborRegister
         address projectArbiter,
         address defaultOperator,
         uint16 startWeek,
-        uint32 weights
+        uint32 weights              // packed uin8[4]
     ) public initializer
     {
         CollaborationAware._initialize(collaboration);
@@ -122,6 +113,11 @@ LaborRegister
     function getWeights() external view returns(uint8[4] memory weights)
     {
         weights = _unpackWeights(_project.weights);
+    }
+
+    function isValidWeight(uint8 weight) external view returns(bool)
+    {
+        return _isValidWeight(weight, _project.weights);
     }
 
     function getTotalTime() external view returns(uint32)
@@ -176,24 +172,24 @@ LaborRegister
 
     /**
     * @dev Set member weight. Can only be done once. Only project lead can call
-    * @param member User whose weight has to be set
-    * @param weightInd WeightInd of the member (the index in `weights`)
+    * @param member User whose weight has to be set for
+    * @param weight for the member
     */
-    function setMemberWeight(address member, WeightInd weightInd) external
+    function setMemberWeight(address member, uint8 weight) external
     onlyProjectLead
     {
-        _setMemberWeight(member, weightInd, true);
+        _setMemberWeight(member, weight, true);
     }
 
     function setMemberWeight(
         address lead,
         address member,
-        WeightInd weightInd
+        uint8 weight
     ) external
     {
         require(isProjectLead(lead), "unauthorized lead");
         require(isOperatorFor(_msgSender(), lead), "unauthorized operator");
-        _setMemberWeight(member, weightInd, true);
+        _setMemberWeight(member, weight, true);
     }
 
     /**
@@ -224,28 +220,27 @@ LaborRegister
     function join(
         bytes calldata invite,
         Status status,
-        WeightInd weightInd,
+        uint8 weight,
         uint16 startWeek,
         uint16 maxTimeWeekly,
         uint160 terms
     ) external
     {
-        _join(_msgSender(), invite, status, weightInd, startWeek, maxTimeWeekly, terms);
+        _join(_msgSender(), invite, status, weight, startWeek, maxTimeWeekly, terms);
     }
 
     function join(
         address user,
         bytes calldata invite,
         Status status,
-        WeightInd weightInd,
+        uint8 weight,
         uint16 startWeek,
         uint16 maxTimeWeekly,
         uint terms
     ) external
     {
         require(isOperatorFor(_msgSender(), user), "unauthorized operator");
-        _join(user, invite, status, weightInd, startWeek, maxTimeWeekly, terms);
-
+        _join(user, invite, status, weight, startWeek, maxTimeWeekly, terms);
     }
 
     /**
@@ -274,21 +269,21 @@ LaborRegister
         _submitTime(member, week, time, uid, true);
     }
 
-    function updateMemberWeight(address member, WeightInd weightInd) external
+    function updateMemberWeight(address member, uint8 weight) external
     onlyProjectArbiter
     {
-        _setMemberWeight(member, weightInd, false);
+        _setMemberWeight(member, weight, false);
     }
 
     function updateMemberWeight(
         address arbiter,
         address member,
-        WeightInd weightInd
+        uint8 weight
     ) external
     {
         require(isProjectArbiter(arbiter), "unauthorized arbiter");
         require(isOperatorFor(_msgSender(), arbiter), "unauthorized operator");
-        _setMemberWeight(member, weightInd, false);
+        _setMemberWeight(member, weight, false);
     }
 
     /**
@@ -325,25 +320,20 @@ LaborRegister
         return LABORLEDGER_IFACE;
     }
 
-    function getWeight(WeightInd weightInd) public view returns(uint8 weight)
-    {
-        uint8[4] memory weights = _unpackWeights(_project.weights);
-        weight = weights[uint8(weightInd)];
-    }
-
     function encodeInviteData (
-        uint status, uint weightInd, uint startWeek, uint maxWeeklyTime, uint terms
+        uint status, uint weight, uint startWeek, uint maxWeeklyTime, uint terms
     ) public pure returns(bytes32)
     {
         return keccak256(
-            abi.encodePacked(status, weightInd, startWeek, maxWeeklyTime, terms)
+            abi.encodePacked(status, weight, startWeek, maxWeeklyTime, terms)
         );
     }
 
-    function _setMemberWeight(address member, WeightInd weightInd, bool onceOnly) internal
+    function _setMemberWeight(address member, uint8 weight, bool onceOnly) internal
     {
-        uint32 labor = _setMemberWeight(member, getWeight(weightInd), onceOnly);
-        _project.labor = _project.time.add(labor);
+        require(_isValidWeight(weight, _project.weights), "invalid weight");
+        uint32 labor = _updateMemberWeight(member, weight, onceOnly);
+        _project.labor = _project.labor.add(labor);
     }
 
     function _setMemberWeekLimit(address member, uint16 maxTime) internal
@@ -356,7 +346,7 @@ LaborRegister
         address member,
         bytes memory invite,
         Status status,
-        WeightInd weightInd,
+        uint8 weight,
         uint16 startWeek,
         uint16 maxWeeklyTime,
         uint terms
@@ -365,14 +355,14 @@ LaborRegister
         _validateInvite(
             invite,
             uint(status),
-            uint(weightInd),
+            uint(weight),
             uint(startWeek),
             uint(maxWeeklyTime),
             terms
         );
         uint16 wTime = maxWeeklyTime == 0 ? STD_MAX_TIME_WEEKLY : maxWeeklyTime;
 
-        _joinMember(member, status, getWeight(weightInd), startWeek, wTime);
+        _joinMember(member, status, weight, startWeek, wTime);
         _clearInvite(invite);
     }
 
@@ -392,7 +382,7 @@ LaborRegister
     function _validateInvite(
         bytes memory invite,
         uint status,
-        uint weightInd,
+        uint weight,
         uint startWeek,
         uint maxWeeklyTime,
         uint terms
@@ -400,7 +390,7 @@ LaborRegister
     {
         require(
             uint(_getInvite(invite)) == uint(
-                encodeInviteData(status, weightInd, startWeek, maxWeeklyTime, terms)
+                encodeInviteData(status, weight, startWeek, maxWeeklyTime, terms)
             ), "invite data unmatched"
         );
     }
@@ -412,6 +402,17 @@ LaborRegister
         weights[2] = uint8((weightsPacked >> 16) & 0xFF);
         weights[1] = uint8((weightsPacked >> 8) & 0xFF);
         weights[0] = uint8(weightsPacked & 0xFF);
+    }
+
+    function _isValidWeight(uint8 weight, uint32 weights) private pure
+    returns(bool)
+    {
+        if (weight == 0) return false;
+        if (weight == uint8((weights >> 8) & 0xFF)) return true;
+        if (weight == uint8((weights >> 16) & 0xFF)) return true;
+        if (weight == uint8((weights >> 24) & 0xFF)) return true;
+        if (weight == uint8(weights & 0xFF)) return true;
+        return false;
     }
 
     /**
