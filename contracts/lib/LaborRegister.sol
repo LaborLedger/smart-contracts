@@ -136,7 +136,8 @@ contract LaborRegister is Constants, WeeksList
     * @dev Returns status, weight and time for a member
     * @param member Address of the member
     * @return status <Status>
-    * @return weight <uint8> as factor (not the index)
+    * @return weight
+    * @return maxTimeWeekly in Time Units
     * @return startWeek as Week Index
     */
     function getMemberData(address member) external view
@@ -144,6 +145,7 @@ contract LaborRegister is Constants, WeeksList
         Status status,
         uint8 weight,
         uint16 startWeek,
+        uint16 maxTimeWeekly,
         uint16 recentWeeks
     )
     {
@@ -151,12 +153,13 @@ contract LaborRegister is Constants, WeeksList
         _members[member].status,
         _members[member].weight,
         _members[member].startWeek,
+        _members[member].maxTimeWeekly,
         _members[member].recentWeeks
         );
     }
 
     function _getMemberLabor(address member) internal view
-        returns(uint32 labor, uint32 settledLabor, uint32 netLabor)
+        returns(uint32 registered, uint32 settled, uint32 net)
     {
         return (
             _members[member].labor,

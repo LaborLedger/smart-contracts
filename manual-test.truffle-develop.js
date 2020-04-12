@@ -134,6 +134,7 @@ async function runTest(web3, artifacts, cb) {
     membData = await ledger.methods.getMemberData(member1).call();
     expect(membData.status*1 === 2, `member1.membData.status ${membData.status}`);
     expect(membData.weight*1 === 4, `member1.membData.weight ${membData.weight}`);
+    expect(membData.maxTimeWeekly*1 === 55*12, `member1.membData.maxTimeWeekly ${membData.maxTimeWeekly}`);
 
     let invData2 = await ledger.methods.encodeInviteData(1,3,1*thisWeek-3,500,32).call();
     await collab.methods.newInvite(invHash, invData2).send({from:inviter});
@@ -156,9 +157,9 @@ async function runTest(web3, artifacts, cb) {
 
     expect(await ledger.methods.getTotalTime().call() === '1300', "getTotalTime()");
     let totalLabor = await ledger.methods.getTotalLabor().call();
-    expect(totalLabor.labor*1 === 3500, "totalLabor.labor");
-    expect(totalLabor.netLabor*1 === 3500, "totalLabor.netLabor");
-    expect(totalLabor.settledLabor*1 === 0, "totalLabor.settledLabor");
+    expect(totalLabor.registered*1 === 3500, "totalLabor.labor");
+    expect(totalLabor.net*1 === 3500, "totalLabor.netLabor");
+    expect(totalLabor.settled*1 === 0, "totalLabor.settledLabor");
 
     expect(await ledger.methods.getMemberLaborShare(member2).call() === '771428', "getMemberLaborShare(member2)");
     expect(await ledger.methods.getMemberLaborShare(member3).call() === '228571', "getMemberLaborShare(member3)");

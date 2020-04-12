@@ -4,7 +4,7 @@ contract Constants {
 
     // in Time Units
     uint16 constant STD_MAX_TIME_WEEKLY = 55 hours / 5 minutes;
-    uint16 constant MAX_MAX_TIME_WEEKLY = 100 hours / 5 minutes;
+    uint16 constant MAX_MAX_TIME_WEEKLY = 168 hours / 5 minutes;
 
     uint16 constant LATEST_START_WEEK = 3130;       // week index for 31/12/2030
 

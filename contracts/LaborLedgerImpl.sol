@@ -126,7 +126,7 @@ LaborRegister
     }
 
     function getTotalLabor() external view
-        returns(uint32 labor, uint32 settledLabor, uint32 netLabor)
+        returns(uint32 registered, uint32 settled, uint32 net)
     {
         return (
             _project.labor,
