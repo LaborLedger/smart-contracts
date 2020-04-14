@@ -234,7 +234,7 @@ contract LaborRegister is Constants, WeeksList
 
         if (_members[member].time != 0) {
             labor = _members[member].time.mul(uint32(_members[member].weight));
-            _members[member].labor = _members[member].time.add(labor);
+            _members[member].labor = _members[member].labor.add(labor);
         }
 
         emit MemberWeightAssigned(member, weight, labor);

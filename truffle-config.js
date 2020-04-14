@@ -26,7 +26,7 @@ module.exports = {
     // docker run -d -p 8545:8545 trufflesuite/ganache-cli:latest
     development: {
       host: "127.0.0.1",
-      port: 7545,
+      port: 8545,
       network_id: "*",
       gasPrice: 2e+9,            // (default: 100 gwei)
       // from: <address>,        // (default: accounts[0])
