@@ -1,4 +1,8 @@
-// truffle exec manual-test.truffle-develop.js --network truffle
+/** To run:
+ (pgrep -f 'truffle develop' || truffle develop --log &) &&
+ truffle exec test/manual.truffle-develop.e2e.js --network truffle --compile
+ */
+
 /* global web3, artifacts */
 
 module.exports = (cb) => {
@@ -15,7 +19,7 @@ module.exports = (cb) => {
 
 async function runTest(web3, artifacts, cb) {
 
-    const {advanceBlock, advanceTimeAndBlock} = require('./scripts/truffle-test-helper')(web3);
+    const {advanceBlock, advanceTimeAndBlock} = require('../scripts/truffle-test-helper')(web3);
     const unixTimeNow = Number.parseInt(`${Date.now() / 1000}`);
     const weekNow = Math.floor((unixTimeNow - 345600) / (7 * 24 * 3600)) + 1;
     console.log(`weekNow: ${weekNow}`);
@@ -25,9 +29,7 @@ async function runTest(web3, artifacts, cb) {
     let defaultOpts = {from: deployer, gas: 5000000};
     console.log('defaultOpts = ', defaultOpts);
 
-    while ((await web3.eth.getBlockNumber()) < 2) {
-        await advanceBlock();
-    }
+    while ((await web3.eth.getBlockNumber()) < 2) { await advanceBlock(); }
     console.log('started at block ', await web3.eth.getBlockNumber());
 
     const CollaborationProxy = artifacts.require("CollaborationProxy") || fall("artifacts CollaborationProxy");

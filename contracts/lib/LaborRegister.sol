@@ -199,10 +199,8 @@ contract LaborRegister is Constants, WeeksList
     function _setMemberStatus(address member, Status status) internal
     memberExists(member)
     {
-        require(
-            status != Status.UNKNOWN && status != Status.OFFBOARDED,
-            "invalid status"
-        );
+        require(status != Status.UNKNOWN, "invalid status");
+        require(_members[member].status != Status.OFFBOARDED, "member off-boarded");
         _members[member].status = status;
         emit MemberStatusUpdated(member, status);
     }
