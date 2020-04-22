@@ -1,4 +1,35 @@
 ########################################################################################################################
+# Deployment on the repsten network on 22-Apr-2020
+###
+
+audacity-dao/ethereum$ source .env.sh
+audacity-dao/ethereum$ truffle console --network ropsten
+
+truffle(ropsten)> (await web3.eth.getAccounts())[0]
+'0x81b9EB22f1a96D30d7Afd1eC9975546008e3008D'
+
+truffle(ropsten)> let defaultOpts = {from: '0x81b9EB22f1a96D30d7Afd1eC9975546008e3008D', gas: 5000000, gasPrice: 20000000000 }
+
+truffle(ropsten)> let proxyAdmin = await OzProxyAdmin.new(defaultOpts)
+truffle(ropsten)> proxyAdmin.address
+'0xf1374e8Cb3B93a355f4564e85F5CEeB390e409C4'
+truffle(ropsten)> proxyAdmin.transactionHash
+'0xf7d7b2c660c733110bfcde62da8d3aa0686480cb49b9f9ed8ef989c10104f541'
+truffle(ropsten)> await proxyAdmin.owner()
+'0x81b9EB22f1a96D30d7Afd1eC9975546008e3008D'
+
+truffle(ropsten)> let collabImpl = await CollaborationImpl.new(defaultOpts)
+truffle(ropsten)> collabImpl.address
+'0xE58826C55efb0c494361b3EF82ee97873A5325b4'
+truffle(ropsten)> collabImpl.transactionHash
+'0x673fab7056bf1b44dafccd35c2b3b9c24a7bd1a48722a8a7aa996c5b410c90f5'
+
+truffle(ropsten)> ledgerImpl.address
+'0xC87753BE484c52b6396feB3a422aA616E1142c70'
+truffle(ropsten)> ledgerImpl.transactionHash
+'0x125b784a07361d0e522634c5705b6c3e64952387fa952eca2e7ea1872c5fd2eb'
+
+########################################################################################################################
 # Deployment on the repsten network on 28-Dec-2019
 ###
 
