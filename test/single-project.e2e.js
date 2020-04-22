@@ -43,7 +43,6 @@ contract("single-project base e2e test", async accounts => {
             arbiter,
             operator,
             2500,
-            0x04030201,
             defaultOpts
         );
         assert(web3.utils.isAddress(collabProxy.address), 'CollaborationProxy deployment failed');

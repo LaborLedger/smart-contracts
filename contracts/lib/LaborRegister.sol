@@ -25,13 +25,22 @@ contract LaborRegister is Constants, WeeksList
         uint8 weight;               // factor (not index) to convert `time` to `labor`
         uint16 startWeek;           // Week Index of the member first week
         uint16 maxTimeWeekly;       // max Time Units allowed to submit per a week
-        uint32 time;                // submitted Time Units
+        uint32 time;                // accepted submitted Time Units
         uint32 labor;               // Labor Units equivalent of `time`
-        uint32 settledLabor;        // Labor Units converted in tokens or paid (reserved)
-        uint16 recentWeeks;         // packed list of latest submission weeks (see `decodeWeeks`)
+        uint16 pendingTime;         // not yet accepted submitted Time Units (reserved)
+        uint16 latestWeek;          // packed list of latest submission weeks (see `decodeWeeks`)
+                                    // !! will be changed: Week Index of the latest week submitted
+        uint16[7] cache;            // Cached latest submissions (reserved)
+    }
+
+    struct Adjustment {
+        uint8 power;
+        int16 time;
     }
 
     mapping(address => Member) private _members;
+    // member => week => adjustment
+    mapping (address => mapping (uint16 => Adjustment)) private _adjusts;
 
     uint256[10] __gap;              // reserved for upgrades
 
@@ -58,15 +67,22 @@ contract LaborRegister is Constants, WeeksList
         uint32 labor                // zero or positive
     );
 
-    event MemberTimePerWeekUpdated(
+    event MemberMaxWeekTimeUpdated(
         address indexed member,
         uint16 maxTimeWeekly
     );
 
     event LaborSettled(
         address indexed member,
-        uint32 settledLabor,
+        uint32 labor,
         bytes32 uid
+    );
+
+    event TimeAdjusted(
+        address indexed member,
+        uint16 week,
+        uint8 power,
+        int16 time
     );
 
     modifier isNotMember(address user)
@@ -119,15 +135,16 @@ contract LaborRegister is Constants, WeeksList
     /**
     * @dev Returns total number of time worked
     * @param member Address of the member
-    * @return uint32 time in Time Units
+    * @return accepted time and pending time in Time Units
     */
-    function getMemberTime(address member) public view returns(uint32)
+    function getMemberTime(address member) public view
+    returns(uint32 accepted, uint32 pending)
     {
-        return _members[member].time;
+        return (_members[member].time, uint32(_members[member].pendingTime));
     }
 
     function getMemberLabor(address member) external view
-        returns(uint32 labor, uint32 settledLabor, uint32 netLabor)
+        returns(uint32 accepted, uint32 pending)
     {
         return _getMemberLabor(member);
     }
@@ -146,33 +163,25 @@ contract LaborRegister is Constants, WeeksList
         uint8 weight,
         uint16 startWeek,
         uint16 maxTimeWeekly,
-        uint16 recentWeeks
+        uint16 latestWeek
     )
     {
         return (
-        _members[member].status,
-        _members[member].weight,
-        _members[member].startWeek,
-        _members[member].maxTimeWeekly,
-        _members[member].recentWeeks
+            _members[member].status,
+            _members[member].weight,
+            _members[member].startWeek,
+            _members[member].maxTimeWeekly,
+            _members[member].latestWeek
         );
     }
 
     function _getMemberLabor(address member) internal view
-        returns(uint32 registered, uint32 settled, uint32 net)
+        returns(uint32 accepted, uint32 pending)
     {
         return (
             _members[member].labor,
-            _members[member].settledLabor,
-            _members[member].labor.sub(_members[member].settledLabor)
+            uint32(_members[member].pendingTime) * _members[member].weight
         );
-    }
-
-    function _getMemberNetLabor(address member) internal view
-        returns(uint32)
-    {
-        if (_members[member].labor == 0) return 0;
-        return _members[member].labor.sub(_members[member].settledLabor);
     }
 
     function _joinMember(
@@ -189,6 +198,7 @@ contract LaborRegister is Constants, WeeksList
         _members[member].startWeek = startWeek != 0 ? startWeek : getCurrentWeek();
 
         if (weight != NO_WEIGHT) {
+            require(_isValidWeight(weight), "invalid weight");
             _members[member].weight = weight;
             emit MemberWeightAssigned(member, weight, 0);
         }
@@ -230,9 +240,10 @@ contract LaborRegister is Constants, WeeksList
             "weight already set"
         );
 
+        require(_isValidWeight(weight), "invalid weight");
         _members[member].weight = weight;
 
-        if (_members[member].time != 0) {
+        if ((_members[member].time != 0) && (_members[member].weight == NO_WEIGHT)) {
             labor = _members[member].time.mul(uint32(_members[member].weight));
             _members[member].labor = _members[member].labor.add(labor);
         }
@@ -250,7 +261,7 @@ contract LaborRegister is Constants, WeeksList
         require(_members[member].status != Status.OFFBOARDED, "member off-boarded");
         require(maxTime != 0, "invalid maxTimePerWeek");
         _members[member].maxTimeWeekly = maxTime;
-        emit MemberTimePerWeekUpdated(member, maxTime);
+        emit MemberMaxWeekTimeUpdated(member, maxTime);
     }
 
     // @notice `time` {int32} may have negative values to cancel over-submitted time
@@ -274,8 +285,8 @@ contract LaborRegister is Constants, WeeksList
             "time exceeds week limit"
         );
 
-        _members[member].recentWeeks = _getUpdatedWeeksList(
-            _members[member].recentWeeks,
+        _members[member].latestWeek = _getUpdatedWeeksList(
+            _members[member].latestWeek,
             week,
             _members[member].startWeek,
             getCurrentWeek() - 1,
@@ -294,12 +305,52 @@ contract LaborRegister is Constants, WeeksList
 
     function _settleLabor(address member, uint32 labor, bytes32 uid) internal
     {
-        _members[member].settledLabor = _members[member].settledLabor.add(labor);
+        _members[member].labor = _members[member].labor.sub(labor);
+        emit LaborSettled(member, labor, uid);
+    }
+
+    function _isValidWeight(uint8 weight) internal pure
+    returns(bool)
+    {
+        return weight != NO_WEIGHT && weight <= MAX_WEIGHT;
+    }
+
+    function getAdjustment(address member, uint16 week) public view
+    returns (uint8 power, int16 time)
+    {
+        return (_adjusts[member][week].power, _adjusts[member][week].time);
+    }
+
+    function _setAdjustment(address member, uint16 week, uint8 power, int16 time)
+    internal
+    {
+        require(power > _adjusts[member][week].power, "not enough power");
+
+        // TODO: get pending time and age of a submission for the week
+        uint16 pending = MAX_MAX_TIME_WEEKLY;
+        uint8 age = 3;
         require(
-            _members[member].labor >= _members[member].settledLabor,
-            "not enough labor units"
+            // Adjusted value can't be negative or more then max weekly time limit
+            time == 0 || ( time < 0
+                    ? uint16(-time) <= pending
+                    : uint16(time) + pending <= _members[member].maxTimeWeekly
+                ),
+            "too big time"
         );
-        emit LaborSettled(member, _members[member].settledLabor, uid);
+        // The Lead has power to adjust within two weeks followed by the submission
+        // The Arbiter (and Quorum) - starting from the 3rd week after the submission
+        require(power > LEAD_POWER ? (age > 2) : (age <= 2), "week closed");
+
+        _adjusts[member][week].power = power;
+        _adjusts[member][week].time = time;
+
+        emit TimeAdjusted(member, week, power, time);
+    }
+
+    function _clearAdjustment(address member, uint16 week) internal
+    {
+        _adjusts[member][week].power = 0;
+        _adjusts[member][week].time = 0;
     }
 }
 

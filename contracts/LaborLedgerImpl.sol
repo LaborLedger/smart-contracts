@@ -31,6 +31,10 @@ LaborRegister
     * @dev "Labor Units"
     * "Labor Units" are "Time Units" weighted with (multiply by) the "weight"
     *
+    * @dev "Accepted" and "pending" time/labor (NOT YET IMPLEMENTED)
+    * Submitted time (labor) gets "accepted" according to a special procedure.
+    * Until it is accepted, the submitted time/labor is considered as "pending".
+    *
     * @dev "Equity Units"
     * Equity submitted, stored and returned in Share Units
     * 100% = 1,000,000 Share Unit(s)
@@ -46,11 +50,10 @@ LaborRegister
     struct Project {
         uint32 birthBlock;          // block the contract is created within
         uint16 startWeek;           // Week Index of the project first week
-        uint32 weights;             // Allowed values for the "weight" (packed uint8[4])
-        uint32 time;                // total submitted hours in Time Units
-        uint32 labor;               // total submitted hours in Labor Units
-        uint32 settledLabor;        // Labor Units converted in tokens or paid (reserved)
-        uint16 _unused;             // reserved
+        uint32 acceptedTime;        // total accepted submitted Time Units
+        uint32 pendingTime;         // total pending submitted Time Units
+        uint32 acceptedLabor;       // total accepted Labor Units
+        uint32 pendingLabor;        // total pending Labor Units
     }
 
     Project private _project;
@@ -69,15 +72,13 @@ LaborRegister
     * (provide zero value(s) for any (all) other param(s) to set the default value(s))
     * @param projectLead <address> (optional) address of project lead
     * @param startWeek <uint16> project first week as Week Index (default - previous week)
-    * @param weights - set of allowed values for the "weight"
     */
     function initialize(
         address collaboration,
         address projectLead,
         address projectArbiter,
         address defaultOperator,
-        uint16 startWeek,
-        uint32 weights              // packed uin8[4]
+        uint16 startWeek
     ) public initializer
     {
         CollaborationAware._initialize(collaboration);
@@ -92,12 +93,6 @@ LaborRegister
         } else {
             _project.startWeek = getCurrentWeek() - 1;
         }
-
-        if (weights != 0) {
-            _project.weights = weights;
-        } else {
-            _project.weights = WEIGHTS;
-        }
     }
 
     function getBirthBlock() external view returns(uint32)
@@ -110,50 +105,36 @@ LaborRegister
         return (_project.startWeek);
     }
 
-    function getWeights() external view returns(uint8[4] memory weights)
+    function getTotalTime() external view returns(uint32 accepted, uint32 pending)
     {
-        weights = _unpackWeights(_project.weights);
-    }
-
-    function isValidWeight(uint8 weight) external view returns(bool)
-    {
-        return _isValidWeight(weight, _project.weights);
-    }
-
-    function getTotalTime() external view returns(uint32)
-    {
-        return (_project.time);
+        return (_project.acceptedTime, _project.pendingTime);
     }
 
     function getTotalLabor() external view
-        returns(uint32 registered, uint32 settled, uint32 net)
+        returns(uint32 accepted, uint32 pending)
     {
         return (
-            _project.labor,
-            _project.settledLabor,
-            _project.labor - _project.settledLabor
+            _project.acceptedLabor,
+            _project.pendingLabor
         );
-    }
-
-    function getMemberNetLabor(address member) external view returns(uint32) {
-        return _getMemberNetLabor(member);
     }
 
     /**
     * @dev Returns the share of a member in total labor (of all members)
     * @param member Address of the member
-    * @return uint32 share in ShareUnits
+    * @return "accepted" labor share and "pending" labor share in Share Units
     */
     function getMemberLaborShare(address member) external view
-    returns(uint32 share)
+    returns(uint32 accepted, uint32 pending)
     {
-        uint32 projectNetLabor = _project.labor.sub(_project.settledLabor);
-        if (projectNetLabor == 0) return 0;
+        (uint32 acceptedLabor, uint32 pendingLabor) = _getMemberLabor(member);
 
-        uint32 netLabor = _getMemberNetLabor(member);
-        if (netLabor == 0) return 0;
+        accepted = _project.acceptedLabor == 0 || acceptedLabor == 0 ?
+            0 : HUNDRED_PERCENT.mul(acceptedLabor).div(_project.acceptedLabor);
 
-        share = HUNDRED_PERCENT.mul(netLabor).div(projectNetLabor);
+        pending = _project.pendingLabor == 0 || pendingLabor == 0 ?
+            0 : HUNDRED_PERCENT.mul(pendingLabor)
+                    .div(_project.acceptedLabor.add(_project.pendingLabor));
     }
 
     function setMemberStatus(address member, Status status) external
@@ -344,9 +325,8 @@ LaborRegister
 
     function _setMemberWeight(address member, uint8 weight, bool onceOnly) internal
     {
-        require(_isValidWeight(weight, _project.weights), "invalid weight");
         uint32 labor = _updateMemberWeight(member, weight, onceOnly);
-        _project.labor = _project.labor.add(labor);
+        _project.acceptedLabor = _project.acceptedLabor.add(labor);
     }
 
     function _setMemberWeekLimit(address member, uint16 maxTime) internal
@@ -388,8 +368,8 @@ LaborRegister
     ) internal
     {
         int32 labor = _submitMemberTime(member, week, time, uid, revertClosedAndDuplicated);
-        _project.time = _project.time.addSigned(time);
-        _project.labor = _project.labor.addSigned(labor);
+        _project.acceptedTime = _project.acceptedTime.addSigned(time);
+        _project.acceptedLabor = _project.acceptedLabor.addSigned(labor);
     }
 
     function _validateInvite(
@@ -406,26 +386,6 @@ LaborRegister
                 encodeInviteData(status, weight, startWeek, maxWeeklyTime, terms)
             ), "invite data unmatched"
         );
-    }
-
-    function _unpackWeights(uint32 weightsPacked) private pure
-    returns(uint8[4] memory weights)
-    {
-        weights[3] = uint8((weightsPacked >> 24) & 0xFF);
-        weights[2] = uint8((weightsPacked >> 16) & 0xFF);
-        weights[1] = uint8((weightsPacked >> 8) & 0xFF);
-        weights[0] = uint8(weightsPacked & 0xFF);
-    }
-
-    function _isValidWeight(uint8 weight, uint32 weights) private pure
-    returns(bool)
-    {
-        if (weight == 0) return false;
-        if (weight == uint8((weights >> 8) & 0xFF)) return true;
-        if (weight == uint8((weights >> 16) & 0xFF)) return true;
-        if (weight == uint8((weights >> 24) & 0xFF)) return true;
-        if (weight == uint8(weights & 0xFF)) return true;
-        return false;
     }
 
     /**

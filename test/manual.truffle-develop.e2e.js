@@ -46,7 +46,7 @@ async function runTest(web3, artifacts, cb) {
     let ledgerImpl = await LaborLedgerImpl.new(defaultOpts) || fall("LaborLedgerImpl.new");
     expect(web3.utils.isAddress(ledgerImpl.address), `LaborLedgerImpl ${ledgerImpl.address}`);
 
-    let collabProxy = await CollaborationProxy.new(collabImpl.address, proxyAdmin.address, '0x33ff', quorum, inviter, 300000, 200000, 500000, ledgerImpl.address, lead, arbiter, operator, 2500, 0x04030201, defaultOpts);
+    let collabProxy = await CollaborationProxy.new(collabImpl.address, proxyAdmin.address, '0x33ff', quorum, inviter, 300000, 200000, 500000, ledgerImpl.address, lead, arbiter, operator, 2500, defaultOpts);
     expect(web3.utils.isAddress(collabProxy.address), `CollaborationProxy ${collabProxy.address}`);
 
     let collab = new web3.eth.Contract(CollaborationImpl.abi, collabProxy.address);
@@ -104,7 +104,10 @@ async function runTest(web3, artifacts, cb) {
 
     await ledger.methods.setMemberStatus(lead, member3, 1).send({from:operator});
     await ledger.methods.submitTime(1*thisWeek-2,167,'0x45').send({from:member3});
-    expect(await ledger.methods.getMemberTime(member3).call() === '167', "getMemberTime 167");
+
+    let membTime = await ledger.methods.getMemberTime(member3).call().catch(console.error);
+    expect( membTime.accepted === '167', "getMemberTime.accepted 167");
+    expect( membTime.pending === '0', "getMemberTime.pending");
 
     await shouldRevert(()=>ledger.methods.submitTime(1*thisWeek-2,233,'0x44').send({from:member3}), 'duplicated submission');
     await shouldRevert(()=>ledger.methods.submitTime(1*thisWeek-1,1233,'0x45').send({from:member3}), 'time exceeds week limit');
@@ -114,13 +117,18 @@ async function runTest(web3, artifacts, cb) {
 
     await ledger.methods.submitTime(1*thisWeek-1,233,'0x44').send({from:member3});
 
-    let membData = await ledger.methods.getMemberData(member3).call();
-    let decodedWeeks = await ledger.methods.decodeWeeks(membData.recentWeeks).call();
-    expect(decodedWeeks.mostRecent*1 === 1*thisWeek-1, "decodedWeeks.mostRecent");
-    expect(decodedWeeks.flags*1 === 1, "decodedWeeks.flags");
-    expect(await ledger.methods.getMemberTime(member3).call() === '400', "getMemberTime");
+    // let membData = await ledger.methods.getMemberData(member3).call();
+    // let decodedWeeks = await ledger.methods.decodeWeeks(membData.recentWeeks).call();
+    // expect(decodedWeeks.mostRecent*1 === 1*thisWeek-1, "decodedWeeks.mostRecent");
+    // expect(decodedWeeks.flags*1 === 1, "decodedWeeks.flags");
+
+    membTime = await ledger.methods.getMemberTime(member3).call();
+    expect(membTime.accepted === '400', "getMemberTime.accepted 400");
+    expect( membTime.pending === '0', "getMemberTime.pending");
+
     let membLabor = await ledger.methods.getMemberLabor(member3).call();
-    expect(membLabor.netLabor*1 === 800, "netLabor");
+    expect(membLabor.accepted*1 === 800, "getMemberLabor.accepted 800");
+    expect(membLabor.pending*1 === 0, "getMemberLabor.pending");
 
     let invData1 = await ledger.methods.encodeInviteData(0,0,0,0,0).call();
     await collab.methods.newInvite(invHash, invData1).send({from:inviter});
@@ -129,7 +137,7 @@ async function runTest(web3, artifacts, cb) {
     expect(membData.status*1 === 1, `member1.membData.status ${membData.status}`);
     expect(membData.weight*1 === 0, `member1.membData.weight ${membData.weight}`);
     expect(membData.startWeek*1 === thisWeek*1, `member1.membData.startWeek ${membData.startWeek}`);
-    expect(membData.recentWeeks * 1 === 0, `member1.membData.recentWeeks ${membData.recentWeeks}`);
+    expect(membData.latestWeek * 1 === 0, `member1.membData.latestWeek ${membData.latestWeek}`);
 
     await ledger.methods.setMemberWeight(lead, member1, 4).send({from:operator}).catch(console.error);
     await ledger.methods.setMemberStatus(lead, member1, 2).send({from:operator});
@@ -150,21 +158,30 @@ async function runTest(web3, artifacts, cb) {
     await ledger.methods.updateTime(arbiter, member2, 1*thisWeek-3, -99, '0x77').send({from: operator});
 
     membData = await ledger.methods.getMemberData(member2).call();
-    decodedWeeks = await ledger.methods.decodeWeeks(membData.recentWeeks).call();
+    decodedWeeks = await ledger.methods.decodeWeeks(membData.latestWeek).call();
     expect(decodedWeeks.mostRecent*1 === 1*thisWeek-1, "decodedWeeks.mostRecent member2");
     expect(decodedWeeks.flags*1 === 3, "decodedWeeks.flags member2");
 
-    expect(await ledger.methods.getMemberTime(member2).call() === '900', "getMemberTime(member2)");
-    expect(await ledger.methods.getMemberNetLabor(member2).call() === '2700', "getMemberNetLabor(member2)");
+    membTime = await ledger.methods.getMemberTime(member2).call();
+    expect( membTime.accepted === '900', "getMemberTime.accepted 900");
+    expect( membTime.pending === '0', "getMemberTime.pending");
 
-    expect(await ledger.methods.getTotalTime().call() === '1300', "getTotalTime()");
+    membLabor = await ledger.methods.getMemberLabor(member2).call();
+    expect(membLabor.accepted === '2700', "getMemberLabor.accepted 2700");
+
+    let totalTime = await ledger.methods.getTotalTime().call();
+    expect(totalTime.accepted === '1300', "getTotalTime.accepted 1300");
+    expect(totalTime.pending === '0', "getTotalTime().pending");
     let totalLabor = await ledger.methods.getTotalLabor().call();
-    expect(totalLabor.registered*1 === 3500, "totalLabor.labor");
-    expect(totalLabor.net*1 === 3500, "totalLabor.netLabor");
-    expect(totalLabor.settled*1 === 0, "totalLabor.settledLabor");
+    expect(totalLabor.accepted*1 === 3500, "totalLabor.accepted 3500");
+    expect(totalLabor.pending*1 === 0, "totalLabor.pending");
 
-    expect(await ledger.methods.getMemberLaborShare(member2).call() === '771428', "getMemberLaborShare(member2)");
-    expect(await ledger.methods.getMemberLaborShare(member3).call() === '228571', "getMemberLaborShare(member3)");
+    let share = await ledger.methods.getMemberLaborShare(member2).call();
+    expect(share.accepted === '771428', `getMemberLaborShare(member2) ${share.accepted}`);
+    expect(share.pending === '0', `getMemberLaborShare(member2) ${share.pending}`);
+    share = await ledger.methods.getMemberLaborShare(member3).call();
+    expect(share.accepted === '228571', `getMemberLaborShare(member3) ${share.accepted}`);
+    expect(share.pending === '0', `getMemberLaborShare(member3) ${share.pending}`);
 
     expect(await collab.methods.getMemberLaborEquity(member2).call() === '462856', "getMemberLaborEquity(member2)");
     expect(await collab.methods.getMemberLaborEquity(member3).call() === '137142', "getMemberLaborEquity(member3)");

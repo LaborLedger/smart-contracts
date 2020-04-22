@@ -12,7 +12,6 @@ contract CollaborationProxy is AdminUpgradeabilityProxy {
      * @param startWeek <uint16> project first week as Week Index (default - previous week)
      * @param managerEquity <uint32> manager equity pool in Share Units
      * @param investorEquity <uint32> investor equity pool in Share Units
-     * @param weights <uint32> four factors to convert Time Units into Labor Units
      * (4 x uint8 packed into uint32) for JUNIOR (lowest byte), STANDARD, SENIOR, ADVISER
      *
      * @dev collaboration is the only mandatory param
@@ -31,8 +30,7 @@ contract CollaborationProxy is AdminUpgradeabilityProxy {
         address projectLead,
         address projectArbiter,
         address defaultOperator,
-        uint16 startWeek,
-        uint32 weights
+        uint16 startWeek
     )
         AdminUpgradeabilityProxy(
             implementation,
@@ -51,8 +49,7 @@ contract CollaborationProxy is AdminUpgradeabilityProxy {
                 projectLead,
                 projectArbiter,
                 defaultOperator,
-                startWeek,
-                weights
+                startWeek
             )
         ) public { }
 }

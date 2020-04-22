@@ -64,8 +64,7 @@ Invites
         address projectLead,
         address projectArbiter,
         address defaultOperator,
-        uint16 startWeek,
-        uint32 weights
+        uint16 startWeek
     ) public initializer
     {
         _collab.uid = uid;
@@ -86,8 +85,7 @@ Invites
             projectLead,
             projectArbiter,
             defaultOperator,
-            startWeek,
-            weights
+            startWeek
         ));
         emit LaborLedger(_collab.laborLedger);
     }
@@ -115,9 +113,9 @@ Invites
     function getMemberLaborEquity(address member) external view returns(uint32 equity)
     {
         if (_collab.laborEquity != 0) {
-            uint256 laborShare = uint256(ILaborLedger(_collab.laborLedger).getMemberLaborShare(member));
-            if (laborShare != 0) {
-                equity = uint32(uint256(_collab.laborEquity) * laborShare / HUNDRED_PERCENT256);
+            (uint32 share, ) = ILaborLedger(_collab.laborLedger).getMemberLaborShare(member);
+            if (share != 0) {
+                equity = uint32(uint256(_collab.laborEquity) * uint256(share) / HUNDRED_PERCENT256);
             }
         }
     }

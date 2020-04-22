@@ -14,8 +14,7 @@ interface ICollaboration {
         address projectLead,
         address projectArbiter,
         address defaultOperator,
-        uint16 startWeek,
-        uint32 weights
+        uint16 startWeek
     ) external;
 
     function isQuorum(address account) external view returns (bool);
