@@ -7,6 +7,7 @@
     "test": "test"
   },
   "devDependencies": {
+    "@vkonst/infura-wallets": "0.0.1",
     "bignumber.js": "^7.2.1",
     "chai": "^4.2.0",
     "coveralls": "^3.0.2",
@@ -18,12 +19,11 @@
     "jsdoc": "^3.6.3",
     "lodash": "^4.17.10",
     "openzeppelin-solidity": "2.3",
-    "openzeppelin-test-helpers": "0.3.2",
+    "openzeppelin-test-helpers": "^0.3.2",
     "solidity-coverage": "github:rotcivegaf/solidity-coverage#5875f5b7bc74d447f3312c9c0e9fc7814b482477",
     "truffle": "^5.1.5",
     "truffle-flattener": "^1.4.2",
-    "web3": "^1.2.1",
-    "@vkonst/infura-wallets": "0.0.1"
+    "web3": "^1.2.1"
   },
   "scripts": {
     "test": "scripts/test.sh",
