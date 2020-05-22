@@ -7,32 +7,6 @@ pragma solidity ^0.5.0;
 
 library SafeMath32 {
 
-    /**
-     * @notice The 2nd argument is the signed integer
-     */
-    function addSigned(uint32 a, int32 b) internal pure returns (uint32) {
-        if (b == 0) {
-            return uint32(a);
-        } else if(b > 0) {
-            return add(a, uint32(b));
-        } else {
-            return sub(a, uint32(-b));
-        }
-    }
-
-    /**
-     * @notice The 2nd argument is the signed integer
-     */
-    function subSigned(uint32 a, int32 b) internal pure returns (uint32) {
-        if (b == 0) {
-            return uint32(a);
-        } else if(b > 0) {
-            return sub(a, uint32(b));
-        } else {
-            return add(a, uint32(-b));
-        }
-    }
-
     function add(uint32 a, uint32 b) internal pure returns (uint32) {
         uint32 c = a + b;
         require(c >= a, "SafeMath32: addition overflow");

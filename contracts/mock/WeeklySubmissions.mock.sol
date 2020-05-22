@@ -16,7 +16,7 @@ contract WeeklySubmissionsMock is WeeklySubmissions {
 
     function mockExtractSubmissions(uint16[8] memory cache) public pure
     returns (
-        uint16 latestOnWeek,
+        uint16 pending,
         uint16[7] memory values,
         uint16[7] memory forWeeks,
         uint16[7] memory onWeeks,

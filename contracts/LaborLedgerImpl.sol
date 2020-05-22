@@ -224,32 +224,6 @@ LaborRegister
         _join(user, invite, status, weight, startWeek, maxTimeWeekly, terms);
     }
 
-    /**
-    * @dev Allows existing members to submit hours
-    *   Submissions allowed by members only and for a week that:
-    *   - has not yet been submitted
-    *   - already has ended
-    *   - ended no later then four weeks ago
-    * @param week Week as uint16
-    * @param time Time worked (expressed in Time Units)
-    * @param uid {bytes32} - unique ID for the submission
-    */
-    function submitTime(uint16 week, int32 time, bytes32 uid) external
-    {
-        _submitTime(_msgSender(), week, time, uid, true);
-    }
-
-    function submitTime(
-        address member,
-        uint16 week,
-        int32 time,
-        bytes32 uid
-    ) external
-    {
-        require(isOperatorFor(_msgSender(), member), "unauthorized operator");
-        _submitTime(member, week, time, uid, true);
-    }
-
     function updateMemberWeight(address member, uint8 weight) external
     onlyProjectArbiter
     {
@@ -268,30 +242,78 @@ LaborRegister
     }
 
     /**
-     * @notice `time` is SIGNED integer
-     */
-    function updateTime(
-        address member,
-        uint16 week,
-        int32 time,
-        bytes32 uid
-    ) external
-    onlyProjectArbiter
+    * @dev Submit working hours for the message sender
+    *   Submissions allowed for members only and for a week that:
+    *   - has not yet been submitted
+    *   - already has ended
+    *   - ended no later then four weeks ago
+    * @param week - Week Index of the reported week
+    * @param time - time worked (expressed in Time Units)
+    * @param uid - unique ID for the submission
+    */
+    function submitTime(uint16 week, uint32 time, bytes32 uid) external
     {
-        _submitTime(member, week, time, uid, false);
+        _submitAndAgeTime(_msgSender(), week, time, uid, false);
     }
 
-    function updateTime(
-        address arbiter,
+    /**
+    * @dev Submit working hours for the `member`
+    */
+    function submitTime(
         address member,
         uint16 week,
-        int32 time,
+        uint32 time,
         bytes32 uid
     ) external
     {
-        require(isProjectArbiter(arbiter), "unauthorized arbiter");
-        require(isOperatorFor(_msgSender(), arbiter), "unauthorized operator");
-        _submitTime(member, week, time, uid, false);
+        require(isOperatorFor(_msgSender(), member), "unauthorized operator");
+        _submitAndAgeTime(member, week, time, uid, false);
+    }
+
+    function adjustPendingTime(address member, uint16 forWeek, uint16 decrease) external {
+        address sender = _msgSender();
+        _adjustPendingTime(sender, member, forWeek, decrease);
+    }
+
+    function adjustPendingTime(address sender, address member, uint16 forWeek, uint16 decrease)
+    external
+    {
+        require(isOperatorFor(_msgSender(), sender), "unauthorized operator");
+        _adjustPendingTime(sender, member, forWeek, decrease);
+    }
+
+    function backdateTime(
+        address member,
+        uint16 week,
+        uint32 time,
+        bytes32 uid
+    ) external
+    {
+        requireQuorum(_msgSender());
+        _submitAndAgeTime(member, week, time, uid, true);
+    }
+
+    function backdateTime(
+        address quorum,
+        address member,
+        uint16 week,
+        uint32 time,
+        bytes32 uid
+    ) external
+    {
+        requireQuorum(quorum);
+        require(isOperatorFor(_msgSender(), quorum), "unauthorized operator");
+        _submitAndAgeTime(member, week, time, uid, true);
+    }
+
+    function ageTime(address member) external {
+        _submitAndAgeTime(member, 0, 0, 0, false);
+    }
+
+    function ageTime(address[] calldata members) external {
+        for (uint i = 0; i < members.length; i++) {
+            _submitAndAgeTime(members[i], 0, 0, 0, false);
+        }
     }
 
     function settleLabor(address member, uint32 labor, bytes32 uid) external
@@ -325,8 +347,14 @@ LaborRegister
 
     function _setMemberWeight(address member, uint8 weight, bool onceOnly) internal
     {
-        uint32 labor = _updateMemberWeight(member, weight, onceOnly);
-        _project.acceptedLabor = _project.acceptedLabor.add(labor);
+        (
+            uint32 acceptedLabor,
+            uint32 pendingLaborBefore,
+            uint32 pendingLaborAfter
+        ) = _updateMemberWeight(member, weight, onceOnly);
+
+        _project.acceptedLabor = _project.acceptedLabor.add(acceptedLabor);
+        _project.pendingLabor = _project.pendingLabor.add(pendingLaborAfter).sub(pendingLaborBefore);
     }
 
     function _setMemberWeekLimit(address member, uint16 maxTime) internal
@@ -359,17 +387,46 @@ LaborRegister
         _clearInvite(invite);
     }
 
-    function _submitTime(
+    function _adjustPendingTime(address sender, address member, uint16 forWeek, uint16 decrease)
+    internal
+    {
+        uint8 power;
+        if (isProjectArbiter(sender)) {
+            power = ARBITER_POWER;
+        } else if (isProjectLead(sender)) {
+            power = LEAD_POWER;
+        } else if (sender == member) {
+            power = MEMBER_POWER;
+        } else if (isQuorum(sender)) {
+            power = QUORUM_POWER;
+        }
+        require(power > 0, "unauthorized");
+        _adjustMemberTime(member, forWeek, power, decrease);
+    }
+
+    /** @dev zero time submission results in aging only */
+    function _submitAndAgeTime(
         address member,
-        uint16 week,
-        int32 time,
+        uint16 forWeek,
+        uint32 newTime,
         bytes32 uid,
-        bool revertClosedAndDuplicated
+        bool skipAging
     ) internal
     {
-        int32 labor = _submitMemberTime(member, week, time, uid, revertClosedAndDuplicated);
-        _project.acceptedTime = _project.acceptedTime.addSigned(time);
-        _project.acceptedLabor = _project.acceptedLabor.addSigned(labor);
+        SubmResults memory results;
+        _submitAndAgeMemberTime(member, forWeek, newTime, uid, skipAging, results);
+
+        _project.acceptedTime = _project.acceptedTime.add(results.acceptedTime);
+        _project.acceptedLabor = _project.acceptedLabor.add(results.acceptedLabor);
+
+        _project.pendingTime = _project.pendingTime
+            .add(results.newPendingTime)
+            .sub(results.acceptedTime)
+            .sub(results.deniedTime);
+        _project.pendingLabor = _project.pendingLabor
+            .add(results.newPendingLabor)
+            .sub(results.acceptedLabor)
+            .sub(results.deniedLabor);
     }
 
     function _validateInvite(
@@ -384,7 +441,7 @@ LaborRegister
         require(
             uint(_getInvite(invite)) == uint(
                 encodeInviteData(status, weight, startWeek, maxWeeklyTime, terms)
-            ), "invite data unmatched"
+            ), "invite data mismatch"
         );
     }
 

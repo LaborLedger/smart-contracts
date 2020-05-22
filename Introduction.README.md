@@ -57,14 +57,14 @@ _Note: the above mentioned contracts use "proxy-implementation" design pattern._
 _So, technically, there are two smart contracts (the proxy and the implementation) for each of them._
 
 #### Tokens-for-Labor
-A "token crowdsale" smart contracts that allows members to "buy" _Project Tokens_ for _Labor Units_.
+A "token crowdsale" smart contract that allows members to "buy" _Project Tokens_ for _Labor Units_.
 
 #### Labor-for-Coins
 A smart contract that allows members to "sell" their Labor Units for DAI/ETH.  
 One may think of it as a "salary payment" contract.
 
 #### Tokens-for-Coins
-A "token crowdsale" smart contracts that allows _Investors_ buy _Project Tokens_ for DAI/ETH (or Pollen Tokens).
+A "token crowdsale" smart contract that allows _Investors_ buy _Project Tokens_ for DAI/ETH (or Pollen Tokens).
 
 #### Admin-Proxy
 The smart contract implementing the _Admin_ role.
@@ -95,7 +95,7 @@ The _Project Arbiter_ acts as a moderator.
 A teammate (or a few teammates collectively, via a multisig smart contract) may act in the _Project Arbiter_ role.  
 ```
 Example:
-A member submit 160 hours for a week.
+A member submits 160 hours for a week.
 The _Project Lead_ believes it is too much and submits the adjustment for minus 80 hours (thus striking out 50% of the member hours).
 The member does not agree with the adjustment and opens a dispute applying to the _Project Arbiter_.
 The _Project Arbiter_ considers the issue and lowers the adjustment to minus 40 hours.

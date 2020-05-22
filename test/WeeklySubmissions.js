@@ -15,10 +15,8 @@ contract("WeeklySubmissions", async accounts => {
 
         it("shall return expected properties", async () => {
             const {
-                latestOnWeek, values, forWeeks, onWeeks, areAged
+                pending, values, forWeeks, onWeeks, areAged
             } = await weeklySubmissions.mockExtractSubmissions(getEmptyCache());
-
-            assert.equal(latestOnWeek, '0', "unexpected latestOnWeek");
 
             assert.equal(Array.isArray(values), true, "unexpected 'values' type");
             assert.equal(Array.isArray(forWeeks), true, "unexpected 'forWeeks' type");
@@ -33,10 +31,10 @@ contract("WeeklySubmissions", async accounts => {
 
         it("shall return zero values when called before submissions", async () => {
             const {
-                latestOnWeek, values, forWeeks, onWeeks, areAged
+                pending, values, forWeeks, onWeeks, areAged
             } = await weeklySubmissions.mockExtractSubmissions(getEmptyCache());
 
-            assert.equal(latestOnWeek, '0', "unexpected latestOnWeek");
+            assert.equal(pending, '0', "unexpected pending value");
 
             for (let i = 0; i<7; i++) {
                 assert.equal(forWeeks[i].toString(), '0', `unexpected 'forWeeks[${i}]'`);
@@ -52,10 +50,10 @@ contract("WeeklySubmissions", async accounts => {
         it("shall cache submission for a week preceding the current week", async () => {
             const exp = {value: '110', week: '2505', curWeek: '2506'};
 
-            const { latestOnWeek, forWeeks, values } = await submitAndGetResults(
+            const { pending, forWeeks, values } = await submitAndGetResults(
                 exp.value, exp.week, exp.curWeek);
 
-            assert.equal(latestOnWeek.toString(), exp.curWeek, "unexpected latestOnWeek");
+            assert.equal(pending.toString(), exp.value, "unexpected pending");
             assert.equal(forWeeks[0].toString(), exp.week, "unexpected forWeek");
             assert.equal(values[0].toString(), exp.value, "unexpected value");
         });
@@ -63,10 +61,10 @@ contract("WeeklySubmissions", async accounts => {
         it("shall cache submission for a week ended 4 weeks before the current week", async () => {
             const exp = {value: '110', week: '2502', curWeek: '2506'};
 
-            const { latestOnWeek, forWeeks, values } = await submitAndGetResults(
+            const { pending, forWeeks, values } = await submitAndGetResults(
                 exp.value, exp.week, exp.curWeek);
 
-            assert.equal(latestOnWeek.toString(), exp.curWeek, "unexpected latestOnWeek");
+            assert.equal(pending.toString(), exp.value, "unexpected pending");
             assert.equal(forWeeks[0].toString(), exp.week, "unexpected forWeek");
             assert.equal(values[0].toString(), exp.value, "unexpected value");
         });
@@ -131,11 +129,11 @@ contract("WeeklySubmissions", async accounts => {
                 const {value, week, curWeek} = exp.submission;
 
                 const {
-                    agedValues, agedWeeks, latestOnWeek, values, forWeeks, onWeeks, areAged, newCache,
+                    agedValues, agedWeeks, pending, values, forWeeks, onWeeks, areAged, newCache,
                 } = await submitAndGetResults(value, week, curWeek, cache);
                 cache = newCache;
 
-                assert.equal(latestOnWeek.toString(), exp.latestOnWeek, "unexpected latestOnWeek");
+                assert.equal(pending.toString(), exp.pending, "unexpected pending");
 
                 for (let i = 0; i<7; i++) {
                     assert.equal(values[i].toString(), exp.values[i], `unexpected 'values[${i}]'`);
@@ -156,10 +154,10 @@ contract("WeeklySubmissions", async accounts => {
         } = await weeklySubmissions.mockCacheSubmission(cache, newValue, forWeek, curWeek);
 
         const {
-            latestOnWeek, values, forWeeks, onWeeks, areAged
+            pending, values, forWeeks, onWeeks, areAged
         } = await weeklySubmissions.mockExtractSubmissions(newCache);
 
-        return { cache, newCache, agedValues, agedWeeks, latestOnWeek, values, forWeeks, onWeeks, areAged };
+        return { cache, newCache, agedValues, agedWeeks, pending, values, forWeeks, onWeeks, areAged };
     }
 
     function getEmptyCache() {
@@ -170,28 +168,28 @@ contract("WeeklySubmissions", async accounts => {
 function getCaseGen() {
     let count = 0;
     const suit = [
-        //id;curW; newSubm  ;_cache[0];_cache[1];_cache[2];_cache[3];_cache[4];_cache[5];_cache[6];_cache[7]; agedValues           ; agedWeeks
-        '01; 2604; 2602,110 ;   2604  ;  0,0,0  ; 0,0,110 ; 0,0,0   ; 0,0,0   ; 0,0,0   ; 0,0,0   ; 0,0,0   ; 0,0,0,0,0,0,0        ; 0,0,0,0,0,0,0',
-        '02; 2604; 2603,80  ;   2604  ;  0,0,80 ; 0,0,110 ; 0,0,0   ; 0,0,0   ; 0,0,0   ; 0,0,0   ; 0,0,0   ; 0,0,0,0,0,0,0        ; 0,0,0,0,0,0,0',
-        '03; 2605; 2604,100 ;   2605  ;  0,0,100; 0,1,80  ; 0,1,110 ; 0,0,0   ; 0,0,0   ; 0,0,0   ; 0,0,0   ; 0,0,0,0,0,0,0        ; 0,0,0,0,0,0,0',
-        '04; 2605; 2601,130 ;   2605  ;  0,0,100; 0,1,80  ; 0,1,110 ; 0,0,130 ; 0,0,0   ; 0,0,0   ; 0,0,0   ; 0,0,0,0,0,0,0        ; 0,0,0,0,0,0,0',
-        '05; 2606; 2605,77  ;   2606  ;  0,0,77 ; 0,1,100 ; 0,2,80  ; 0,2,110 ; 0,1,130 ; 0,0,0   ; 0,0,0   ; 0,0,0,0,0,0,0        ; 0,0,0,0,0,0,0',
-        '06; 2608; 0,0      ;   2606  ;  0,0,77 ; 0,1,100 ; 1,2,80  ; 1,2,110 ; 0,1,130 ; 0,0,0   ; 0,0,0   ; 80,110,0,0,0,0,0     ; 2603,2602,0,0,0,0,0',
-        '07; 2610; 2609,103 ;   2610  ;  0,0,103; 0,0,0   ; 0,0,0   ; 0,0,0   ; 1,4,77  ; 1,5,100 ; 1,6,80  ; 77,100,130,0,0,0,0   ; 2605,2604,2601,0,0,0,0',
-        '08; 2610; 2608,105 ;   2610  ;  0,0,103; 0,0,105 ; 0,0,0   ; 0,0,0   ; 1,4,77  ; 1,5,100 ; 1,6,80  ; 0,0,0,0,0,0,0        ; 0,0,0,0,0,0,0',
-        '09; 2610; 2607,108 ;   2610  ;  0,0,103; 0,0,105 ; 0,0,108 ; 0,0,0   ; 1,4,77  ; 1,5,100 ; 1,6,80  ; 0,0,0,0,0,0,0        ; 0,0,0,0,0,0,0',
-        '10; 2610; 2606,107 ;   2610  ;  0,0,103; 0,0,105 ; 0,0,108 ; 0,0,107 ; 1,4,77  ; 1,5,100 ; 1,6,80  ; 0,0,0,0,0,0,0        ; 0,0,0,0,0,0,0',
-        '11; 2611; 2610,123 ;   2611  ;  0,0,123; 0,1,103 ; 0,1,105 ; 0,1,108 ; 0,1,107 ; 1,5,77  ; 1,6,100 ; 0,0,0,0,0,0,0        ; 0,0,0,0,0,0,0',
-        '12; 2612; 2611,93  ;   2612  ;  0,0,93 ; 0,1,123 ; 0,2,103 ; 0,2,105 ; 0,2,108 ; 0,2,107 ; 1,6,77  ; 0,0,0,0,0,0,0        ; 0,0,0,0,0,0,0',
-        '13; 2613; 2612,67  ;   2613  ;  0,0,67 ; 0,1,93  ; 0,2,123 ; 0,3,103 ; 0,3,105 ; 0,3,108 ; 0,3,107 ; 0,0,0,0,0,0,0        ; 0,0,0,0,0,0,0',
-        '14; 2614; 2613,144 ;   2614  ;  0,0,144; 0,1,67  ; 0,2,93  ; 0,3,123 ; 1,4,103 ; 1,4,105 ; 1,4,108 ; 103,105,108,107,0,0,0; 2609,2608,2607,2606,0,0,0',
-        '15; 2615; 2614,116 ;   2615  ;  0,0,116; 0,1,144 ; 0,2,67  ; 0,3,93  ; 1,4,123 ; 1,5,103 ; 1,5,105 ; 123,0,0,0,0,0,0      ; 2610,0,0,0,0,0,0',
-        '16; 2617; 0,0      ;   2615  ;  0,0,116; 0,1,144 ; 1,2,67  ; 1,3,93  ; 1,4,123 ; 1,5,103 ; 1,5,105 ; 67,93,0,0,0,0,0      ; 2612,2611,0,0,0,0,0',
+       //id; curW; newSubm  ;_cache[0];_cache[1];_cache[2];_cache[3];_cache[4];_cache[5];_cache[6];_cache[7]; pending; agedValues           ; agedWeeks
+        '01; 2604; 2602,110 ;   2604  ;  0,0,0  ; 0,0,110 ; 0,0,0   ; 0,0,0   ; 0,0,0   ; 0,0,0   ; 0,0,0   ;    110 ; 0,0,0,0,0,0,0        ; 0,0,0,0,0,0,0',
+        '02; 2604; 2603,80  ;   2604  ;  0,0,80 ; 0,0,110 ; 0,0,0   ; 0,0,0   ; 0,0,0   ; 0,0,0   ; 0,0,0   ;    190 ; 0,0,0,0,0,0,0        ; 0,0,0,0,0,0,0',
+        '03; 2605; 2604,100 ;   2605  ;  0,0,100; 0,1,80  ; 0,1,110 ; 0,0,0   ; 0,0,0   ; 0,0,0   ; 0,0,0   ;    290 ; 0,0,0,0,0,0,0        ; 0,0,0,0,0,0,0',
+        '04; 2605; 2601,130 ;   2605  ;  0,0,100; 0,1,80  ; 0,1,110 ; 0,0,130 ; 0,0,0   ; 0,0,0   ; 0,0,0   ;    420 ; 0,0,0,0,0,0,0        ; 0,0,0,0,0,0,0',
+        '05; 2606; 2605,77  ;   2606  ;  0,0,77 ; 0,1,100 ; 0,2,80  ; 0,2,110 ; 0,1,130 ; 0,0,0   ; 0,0,0   ;    497 ; 0,0,0,0,0,0,0        ; 0,0,0,0,0,0,0',
+        '06; 2608; 0,0      ;   2606  ;  0,0,77 ; 0,1,100 ; 1,2,80  ; 1,2,110 ; 0,1,130 ; 0,0,0   ; 0,0,0   ;    307 ; 80,110,0,0,0,0,0     ; 2603,2602,0,0,0,0,0',
+        '07; 2610; 2609,103 ;   2610  ;  0,0,103; 0,0,0   ; 0,0,0   ; 0,0,0   ; 1,4,77  ; 1,5,100 ; 1,6,80  ;    103 ; 77,100,130,0,0,0,0   ; 2605,2604,2601,0,0,0,0',
+        '08; 2610; 2608,105 ;   2610  ;  0,0,103; 0,0,105 ; 0,0,0   ; 0,0,0   ; 1,4,77  ; 1,5,100 ; 1,6,80  ;    208 ; 0,0,0,0,0,0,0        ; 0,0,0,0,0,0,0',
+        '09; 2610; 2607,108 ;   2610  ;  0,0,103; 0,0,105 ; 0,0,108 ; 0,0,0   ; 1,4,77  ; 1,5,100 ; 1,6,80  ;    316 ; 0,0,0,0,0,0,0        ; 0,0,0,0,0,0,0',
+        '10; 2610; 2606,107 ;   2610  ;  0,0,103; 0,0,105 ; 0,0,108 ; 0,0,107 ; 1,4,77  ; 1,5,100 ; 1,6,80  ;    423 ; 0,0,0,0,0,0,0        ; 0,0,0,0,0,0,0',
+        '11; 2611; 2610,123 ;   2611  ;  0,0,123; 0,1,103 ; 0,1,105 ; 0,1,108 ; 0,1,107 ; 1,5,77  ; 1,6,100 ;    546 ; 0,0,0,0,0,0,0        ; 0,0,0,0,0,0,0',
+        '12; 2612; 2611,93  ;   2612  ;  0,0,93 ; 0,1,123 ; 0,2,103 ; 0,2,105 ; 0,2,108 ; 0,2,107 ; 1,6,77  ;    639 ; 0,0,0,0,0,0,0        ; 0,0,0,0,0,0,0',
+        '13; 2613; 2612,67  ;   2613  ;  0,0,67 ; 0,1,93  ; 0,2,123 ; 0,3,103 ; 0,3,105 ; 0,3,108 ; 0,3,107 ;    706 ; 0,0,0,0,0,0,0        ; 0,0,0,0,0,0,0',
+        '14; 2614; 2613,144 ;   2614  ;  0,0,144; 0,1,67  ; 0,2,93  ; 0,3,123 ; 1,4,103 ; 1,4,105 ; 1,4,108 ;    427 ; 103,105,108,107,0,0,0; 2609,2608,2607,2606,0,0,0',
+        '15; 2615; 2614,116 ;   2615  ;  0,0,116; 0,1,144 ; 0,2,67  ; 0,3,93  ; 1,4,123 ; 1,5,103 ; 1,5,105 ;    420 ; 123,0,0,0,0,0,0      ; 2610,0,0,0,0,0,0',
+        '16; 2617; 0,0      ;   2615  ;  0,0,116; 0,1,144 ; 1,2,67  ; 1,3,93  ; 1,4,123 ; 1,5,103 ; 1,5,105 ;    260 ; 67,93,0,0,0,0,0      ; 2612,2611,0,0,0,0,0',
     ];
     return () => {
         if (count >= suit.length) return null;
 
-        let curWeek, id, agedValues, agedWeeks;
+        let curWeek, id, pending, agedValues, agedWeeks;
         let submission = {};
         const cache = [0, {}, {}, {}, {}, {}, {}, {}];
         [
@@ -205,6 +203,7 @@ function getCaseGen() {
             [cache[5].isAged, cache[5].age, cache[5].value],
             [cache[6].isAged, cache[6].age, cache[6].value],
             [cache[7].isAged, cache[7].age, cache[7].value],
+            [pending],
             agedValues,
             agedWeeks
         ] = suit[count++].split(';').map(s => s.trim()).map(s => s.split(','));
@@ -237,6 +236,7 @@ function getCaseGen() {
             cache,
             agedValues,
             agedWeeks,
+            pending,
             latestOnWeek,
             values,
             forWeeks,

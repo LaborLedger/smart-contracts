@@ -20,9 +20,14 @@ contract Constants {
     uint256 constant HUNDRED_PERCENT256 = 1000000;
 
     // Time adjustments power
+    uint8 constant MEMBER_POWER = 1;
     uint8 constant LEAD_POWER = 2;
-    uint8 constant ARBITER_POWER_ = 8;
-    uint8 constant QUORUM_POWER = 16;
+    uint8 constant ARBITER_POWER = 4;
+    uint8 constant QUORUM_POWER = 8;
+
+    // Adjustments event types
+    uint8 constant ADJ_UPDATED = 1;
+    uint8 constant ADJ_APPLIED = 2;
 
     // ERC-165 Selectors and interface IDs
 

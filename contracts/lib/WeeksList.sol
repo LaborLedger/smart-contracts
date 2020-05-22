@@ -35,7 +35,7 @@ contract WeeksList is Weeks {
      * @param week {uint16} - Week Index of the week to set the flag to 'on'
      * @param startWeek {uint16} - Week Index of the earliest week in the allowed range
      * @param slidingWeek {uint16} - WeekIndex of the last week in the allowed range of 5 consecutive weeks
-     * @param revertClosedAndDuplicated {bool} - revert if the week is out of the allowed range or already set 'on'
+     * @param ignoreClosedAndDuplicated {bool} - ignore if the week is out of the allowed range or already set 'on'
      * @return {uint16} - the updated weeks list
      */
     function _getUpdatedWeeksList(
@@ -43,14 +43,14 @@ contract WeeksList is Weeks {
         uint16 week,
         uint16 startWeek,
         uint16 slidingWeek,
-        bool revertClosedAndDuplicated
+        bool ignoreClosedAndDuplicated
     ) internal pure returns (uint16)
     {
         require(week >= startWeek, "invalid week (too old)");
 
         require(slidingWeek >= week, "invalid week (not yet open)");
 
-        if (!revertClosedAndDuplicated) {
+        if (!ignoreClosedAndDuplicated) {
             require(slidingWeek - week <= 5, "invalid week (closed)");
         }
 
@@ -60,7 +60,7 @@ contract WeeksList is Weeks {
         require(mostRecent > 4, "program bug"); // logic error (year 1970 unexpected)
 
         if (week == mostRecent) {
-            require(!revertClosedAndDuplicated, "duplicated week");
+            require(ignoreClosedAndDuplicated, "duplicated week");
             return weeksList;
         }
 
@@ -75,12 +75,12 @@ contract WeeksList is Weeks {
 
         if (offset > 4) {
             // `week < mostRecent`, if it comes here
-            require(!revertClosedAndDuplicated, "invalid week (too old)");
+            require(ignoreClosedAndDuplicated, "invalid week (too old)");
             return weeksList;
         }
 
         uint8 weekBit = uint8(0x01) << uint8(offset - 1);
-        require(!revertClosedAndDuplicated || (flags & weekBit == 0), "duplicated week");
+        require(ignoreClosedAndDuplicated || (flags & weekBit == 0), "duplicated week");
 
         return uint16(mostRecent << 4) | uint16(flags | weekBit);
     }
