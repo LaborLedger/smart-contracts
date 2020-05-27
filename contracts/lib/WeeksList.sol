@@ -50,7 +50,7 @@ contract WeeksList is Weeks {
 
         require(slidingWeek >= week, "invalid week (not yet open)");
 
-        if (!revertClosedAndDuplicated) {
+        if (revertClosedAndDuplicated) {
             require(slidingWeek - week <= 5, "invalid week (closed)");
         }
 
