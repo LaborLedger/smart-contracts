@@ -46,11 +46,12 @@ LaborRegister
     struct Project {
         uint32 birthBlock;          // block the contract is created within
         uint16 startWeek;           // Week Index of the project first week
-        uint32 weights;             // Allowed values for the "weight" (packed uint8[4])
         uint32 time;                // total submitted hours in Time Units
+		uint32 __gap;				// left for compatibility with the next version
         uint32 labor;               // total submitted hours in Labor Units
+		uint48 ___gap;				// left for compatibility with the next version
         uint32 settledLabor;        // Labor Units converted in tokens or paid (reserved)
-        uint16 _unused;             // reserved
+        uint32 weights;             // Allowed values for the "weight" (packed uint8[4])
     }
 
     Project private _project;

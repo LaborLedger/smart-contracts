@@ -27,9 +27,12 @@ contract LaborRegister is Constants, WeeksList
         uint16 maxTimeWeekly;       // max Time Units allowed to submit per a week
         uint32 time;                // submitted Time Units
         uint32 labor;               // Labor Units equivalent of `time`
+        uint96 __gap;               // left for compatibility with the next version
         uint32 settledLabor;        // Labor Units converted in tokens or paid (reserved)
         uint16 recentWeeks;         // packed list of latest submission weeks (see `decodeWeeks`)
     }
+
+    uint256[11] ___gap;             // for compatibility with the next version
 
     mapping(address => Member) private _members;
 
