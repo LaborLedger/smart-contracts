@@ -1,5 +1,36 @@
 ########################################################################################################################
-# Deployment on the repsten network on 22-Apr-2020
+# Deployment on the ropsten network on 03-Jun-2020
+###
+
+truffle(ropsten)> (await web3.eth.getAccounts())[0]
+'0x81b9EB22f1a96D30d7Afd1eC9975546008e3008D'
+truffle(ropsten)> let defaultOpts = {from: '0x81b9EB22f1a96D30d7Afd1eC9975546008e3008D', gas: 5000000, gasPrice: 10000000 }
+truffle(ropsten)> let ledgerImpl = await LaborLedgerImpl.new(defaultOpts)
+truffle(ropsten)> ledgerImpl.address
+'0x09a7CE766bA473Ac61ab60c800956ab75c45A3D5'
+truffle(ropsten)> ledgerImpl.transactionHash
+'0xa4f336de1e96356ad11129356c3cb8fefa2036157c6bd6f34ab3283f17d1a6df'
+
+########################################################################################################################
+# Deployment on the ropsten network on 02-Jun-2020
+###
+
+audacity-dao/ethereum$ source .env.sh
+audacity-dao/ethereum$ truffle console --network ropsten
+
+truffle(ropsten)> (await web3.eth.getAccounts())[0]
+'0x81b9EB22f1a96D30d7Afd1eC9975546008e3008D'
+
+truffle(ropsten)> let defaultOpts = {from: '0x81b9EB22f1a96D30d7Afd1eC9975546008e3008D', gas: 5000000, gasPrice: 10000000 }
+
+truffle(ropsten)> let ledgerImpl = await LaborLedgerImpl.new(defaultOpts)
+truffle(ropsten)> ledgerImpl.address
+'0xA972dCCfCb9EA75E7a2262820fB8fbFFf1a51F2e'
+truffle(ropsten)> ledgerImpl.transactionHash
+'0xbd2f85654502b40fb6308ffcc14a991630a6b8053e5754c702ab67eda1c6177e'
+
+########################################################################################################################
+# Deployment on the ropsten network on 22-Apr-2020
 ###
 
 audacity-dao/ethereum$ source .env.sh

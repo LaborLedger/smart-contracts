@@ -1,0 +1,167 @@
+/** @dev Storage compatibility
+ * current version: "history-import branch"
+ * next version: "multistage-submissions branch"
+ *
+ * Data storage of the current and the next versions MUST be compatible
+ */
+
+/**** history-import branch ****/
+
+/** LaborLedger */
+// Initializable,
+  bool private initialized;  // 0
+  bool private initializing; // 0
+  uint256[50] private ______gap; // 1..50
+// Constants
+// ILaborLedger,
+// Erc165Compatible,
+// LaborLedgerRoles
+    Roles.Role private _leads; // 51
+    Roles.Role private _arbiters; // 52
+    uint256[10] __gap; // 53..62
+// CollaborationAware,
+    address internal _collaboration; // 63
+    uint256[10] __gap; // 64..73
+// Operators
+    address private _defaultOperator; // 74
+    mapping(address => mapping(address => bool)) private _operators; // 75
+    mapping(address => mapping(address => bool)) private _revokedDefaultOperators; 76
+    uint256[10] __gap; // 77..86
+// LaborRegister
+    // +++
+    uint256[11] __gap; // 87..97 - for compatibility with the next version
+    mapping(address => Member) private _members; // 98
+    struct Member {
+        Status status;           //  0
+        uint8 weight;            //  1    factor (not index) to convert `time` to `labor`
+        uint16 startWeek;        //  2-3  Week Index of the member first week
+        uint16 maxTimeWeekly;    //  4-5  max Time Units allowed to submit per a week
+        uint32 time;             //  6-9  submitted Time Units
+        uint32 labor;            // 10-13 Labor Units equivalent of `time`
+        uint96 __gap             // 14-25 +++ left for compatibility with the next version
+        uint32 settledLabor;     // 26-29 Labor Units converted in tokens or paid (reserved)
+        uint16 recentWeeks;      // 30-31 packed list of latest submission weeks (see `decodeWeeks`)
+    }
+    uint256[10] __gap; // 99..108
+// LaborLedgerImpl
+    Project private _project; // 109
+    struct Project {
+        uint32 birthBlock;          // block the contract is created within
+        uint16 startWeek;           // Week Index of the project first week
+        uint32 time;                // total submitted hours in Time Units
+		uint32 __gap;				// +++ left for compatibility with the next version
+        uint32 labor;               // total submitted hours in Labor Units
+		uint48 __gap2;				// +++ left for compatibility with the next version
+        uint32 settledLabor;        // Labor Units converted in tokens or paid (reserved)
+        uint32 weights;             // Allowed values for the "weight" (packed uint8[4])
+    }
+    uint256[10] __gap;              // reserved for upgrades
+
+/** Collaboration */
+  bool private initialized;		// 0
+  bool private initializing;	// 0
+  uint256[50] private ______gap;	// 1.. 50
+
+  Roles.Role private _quorums;	// 51
+  Roles.Role private _inviters; // 52
+  uint256[10] __gap;			// 53 .. 62
+
+  address private _defaultOperator;	// 63
+  mapping(address => mapping(address => bool)) private _operators; // 64
+  mapping(address => mapping(address => bool)) private _revokedDefaultOperators; // 65
+  uint256[10] __gap; // 66 .. 75
+
+  mapping (bytes32 => bytes32) private _invites; // 76
+  uint256[10] __gap; // 77 .. 86
+
+  Collaboration internal _collab;	// 87
+    struct Collaboration {
+        bytes32 uid;
+        address laborLedger;
+        address token;
+
+        // Equity pools expressed in Share Units (100%=(1)+(2)+(3))
+        uint32 managerEquity;       // (1) management equity pool
+        uint32 investorEquity;      // (2) investor equity pool
+        uint32 laborEquity;         // (3) labor-units-based equity pool
+    }
+  uint256[10] __gap;
+
+/**** multistage-submissions branch ****/
+
+/** LaborLedger */
+// Initializable,
+  bool private initialized; // 0
+  bool private initializing; // 0
+  uint256[50] private ______gap; // 1..50
+// Context,
+// Constants,
+// ILaborLedger,
+// Erc165Compatible,
+// LaborLedgerRoles,
+    Roles.Role private _leads; // 51
+    Roles.Role private _arbiters; // 52
+    uint256[10] __gap; // 53..62
+// CollaborationAware,
+    address internal _collaboration; // 63
+    uint256[10] __gap; // 64..73
+// Operators,
+    address private _defaultOperator; // 74
+    mapping(address => mapping(address => bool)) private _operators; // 75
+    mapping(address => mapping(address => bool)) private _revokedDefaultOperators; // 76
+    uint256[10] __gap; // 77..86
+// LaborRegister
+    mapping (address => mapping (uint16 => Adjustment)) private _adjusts; // 87
+    uint256[10] __gap; // 88..97
+    mapping(address => Member) private _members; // 98
+      struct Member {
+        Status status;
+        uint8 weight;               // factor (not index) to convert `time` to `labor`
+        uint16 startWeek;           // Week Index of the member first week
+        uint16 maxTimeWeekly;       // max Time Units allowed to submit per a week
+        uint32 time;                // accepted submitted Time Units
+        uint32 labor;               // Labor Units equivalent of `time`
+        uint16 pendingTime;         // not yet accepted submitted Time Units
+        uint16[8] cache;            // Cached latest submissions
+      }
+    uint256[10] __gap; // 99..108
+// LaborLedgerImpl
+    Project private _project; // 109
+      struct Project {
+        uint32 birthBlock;          // block the contract is created within
+        uint16 startWeek;           // Week Index of the project first week
+        uint32 acceptedTime;        // total accepted submitted Time Units
+        uint32 pendingTime;         // total pending submitted Time Units
+        uint32 acceptedLabor;       // total accepted Labor Units
+        uint32 pendingLabor;        // total pending Labor Units
+      }
+
+/** Collaboration */
+  bool private initialized;
+  bool private initializing;
+  uint256[50] private ______gap;
+
+  Roles.Role private _quorums;
+  Roles.Role private _inviters;
+  uint256[10] __gap;
+
+  address private _defaultOperator;
+  mapping(address => mapping(address => bool)) private _operators;
+  mapping(address => mapping(address => bool)) private _revokedDefaultOperators;
+  uint256[10] __gap;
+
+  mapping (bytes32 => bytes32) private _invites;
+  uint256[10] __gap;
+
+  Collaboration internal _collab;
+    struct Collaboration {
+        bytes32 uid;
+        address laborLedger;
+        address token;
+
+        // Equity pools expressed in Share Units (100%=(1)+(2)+(3))
+        uint32 managerEquity;       // (1) management equity pool
+        uint32 investorEquity;      // (2) investor equity pool
+        uint32 laborEquity;         // (3) labor-units-based equity pool
+    }
+  uint256[10] __gap;
