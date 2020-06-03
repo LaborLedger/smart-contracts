@@ -154,7 +154,7 @@ LaborRegister
         uint32 netLabor = _getMemberNetLabor(member);
         if (netLabor == 0) return 0;
 
-        share = HUNDRED_PERCENT.mul(netLabor).div(projectNetLabor);
+        share = uint32(HUNDRED_PERCENT256 * uint256(netLabor) / uint256(projectNetLabor));
     }
 
     function setMemberStatus(address member, Status status) external
